@@ -630,6 +630,45 @@ export default function Analytics() {
             </form>
           </div>
         </div>
+            <h3 className="font-semibold text-slate-200 text-sm flex items-center gap-2 border-b border-slate-800 pb-3 mb-1">
+              <Plus className="w-4.5 h-4.5 text-emerald-400" />
+              <span>Record Other Expense</span>
+            </h3>
+
+            <form onSubmit={handleAddCustomExpense} className="flex flex-col gap-4">
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Expense Name / Note</label>
+                <input
+                  type="text"
+                  value={newExpenseName}
+                  onChange={(e) => setNewExpenseName(e.target.value)}
+                  placeholder="e.g. Sewing threads, S-Pen replacement"
+                  className="w-full px-4 py-2 bg-slate-950/80 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-600 focus:outline-none focus:border-brand-500 text-sm transition"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Amount (₹)</label>
+                <input
+                  type="number"
+                  value={newExpenseAmount}
+                  onChange={(e) => setNewExpenseAmount(e.target.value)}
+                  placeholder="e.g. 450"
+                  className="w-full px-4 py-2 bg-slate-950/80 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-600 focus:outline-none focus:border-brand-500 text-sm transition"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isAddingExpense}
+                className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition shadow-lg"
+              >
+                {isAddingExpense ? 'Adding...' : 'Add Expense'}
+              </button>
+            </form>
+          </div>
+        </div>
 
         {/* Custom Expenses Ledger (Right) */}
         <div className="lg:col-span-7 card p-5 flex flex-col gap-4 h-[470px] overflow-hidden">
@@ -670,221 +709,3 @@ export default function Analytics() {
 
       </div>
 
-      {/* 4. DEFAULT CLOTH PRICING — ADMIN CONTROL */}
-      <div className="card p-5 flex flex-col gap-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-100 gap-2">
-          <div className="flex items-center gap-2">
-            <Settings className="w-4 h-4 text-gray-400" />
-            <h3 className="text-sm font-semibold text-gray-800">Default Cloth Pricing</h3>
-          </div>
-          <span className="text-xs text-gray-400">Prices set here auto-fill during order creation.</span>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-          <form onSubmit={handleSaveClothConfig} className="lg:col-span-4 flex flex-col gap-3 bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <p className="section-label">Set / Update Default Price</p>
-            <div>
-              <label className="section-label mb-1.5 block">Cloth Type</label>
-              <input type="text" value={newClothType} onChange={(e) => setNewClothType(e.target.value)}
-                placeholder="e.g. Shirt, Sherwani" className="field-input" required />
-            </div>
-            <div>
-              <label className="section-label mb-1.5 block">Price (₹)</label>
-              <input type="number" value={newClothPrice} onChange={(e) => setNewClothPrice(e.target.value)}
-                placeholder="e.g. 500" className="field-input" required />
-            </div>
-            <button type="submit" disabled={isSavingClothConfig} className="btn-primary justify-center">
-              {isSavingClothConfig ? 'Saving...' : 'Save Price'}
-            </button>
-          </form>
-          <div className="lg:col-span-8 card overflow-hidden" style={{maxHeight:'260px', overflowY:'auto'}}>
-            {isLoadingClothConfigs ? (
-              <div className="py-12 text-center text-gray-400 text-xs">Loading...</div>
-            ) : clothConfigs.length === 0 ? (
-              <div className="py-12 text-center text-gray-400 text-xs">No prices configured yet. Add one on the left.</div>
-            ) : (
-              <table className="data-table text-xs">
-                <thead><tr><th>Cloth Type</th><th className="text-right">Default Price</th><th className="text-center">Action</th></tr></thead>
-                <tbody>
-                  {clothConfigs.map((cfg) => (
-                    <tr key={cfg._id}>
-                      <td className="font-semibold">{cfg.cloth_type}</td>
-                      <td className="text-right font-mono font-bold text-brand-600">₹{cfg.default_price}</td>
-                      <td className="text-center">
-                        <button type="button"
-                          onClick={() => { setNewClothType(cfg.cloth_type); setNewClothPrice(cfg.default_price); }}
-                          className="text-2xs font-semibold text-brand-600 hover:underline">Edit</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* PAYROLL MODAL */}
-      {showSalariesModal && (
-        <div className="modal-overlay" onClick={() => { setShowSalariesModal(false); setShowAddEmployeeForm(false); }}>
-          <div className="modal-panel max-w-2xl max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-semibold text-gray-900">Staff Payroll</h3>
-                <span className="section-label">{getActiveMonthLabel()}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setShowAddEmployeeForm(!showAddEmployeeForm)} className="btn-secondary text-xs py-1.5">
-                  <UserPlus className="w-3.5 h-3.5" /> {showAddEmployeeForm ? 'Cancel' : 'Add Employee'}
-                </button>
-                <button className="btn-ghost p-1.5" onClick={() => { setShowSalariesModal(false); setShowAddEmployeeForm(false); }}>
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-            <div className="p-5 flex-1 flex flex-col gap-4 overflow-y-auto">
-              {showAddEmployeeForm && (
-                <form onSubmit={handleAddEmployee} className="card p-4 flex flex-col sm:flex-row items-end gap-3">
-                  <div className="flex-1">
-                    <label className="section-label mb-1.5 block">Employee Name</label>
-                    <input type="text" value={newEmployeeName} onChange={(e) => setNewEmployeeName(e.target.value)}
-                      placeholder="e.g. Ramesh K." className="field-input text-xs" required />
-                  </div>
-                  <div className="sm:w-40">
-                    <label className="section-label mb-1.5 block">Monthly Salary (₹)</label>
-                    <input type="number" value={newEmployeeSalary} onChange={(e) => setNewEmployeeSalary(e.target.value)}
-                      placeholder="e.g. 10000" className="field-input text-xs" required />
-                  </div>
-                  <button type="submit" disabled={isAddingEmployee} className="btn-primary text-xs py-2 shrink-0">
-                    {isAddingEmployee ? 'Adding...' : 'Add'}
-                  </button>
-                </form>
-              )}
-              <div className="card p-3 bg-gray-50 flex items-center justify-between">
-                <div>
-                  <p className="section-label mb-0.5">Total Paid This Month</p>
-                  <p className="text-xl font-bold text-gray-900">₹{summary.salariesPaid}</p>
-                </div>
-                <p className="text-xs text-gray-400 max-w-[200px] text-right leading-relaxed">Toggle to PAID to log the salary as a monthly expense.</p>
-              </div>
-              <div className="card overflow-hidden">
-                {isLoadingSalaries ? (
-                  <div className="py-12 text-center text-sm text-gray-400">Loading...</div>
-                ) : employees.length === 0 ? (
-                  <div className="py-12 text-center text-sm text-gray-400">No employees registered.</div>
-                ) : (
-                  <table className="data-table">
-                    <thead><tr><th>Employee</th><th className="text-right">Monthly Salary</th><th className="text-center">Status</th></tr></thead>
-                    <tbody>
-                      {employees.map((emp) => (
-                        <tr key={emp.employee_id}>
-                          <td className="font-semibold">{emp.name}</td>
-                          <td className="text-right font-mono">
-                            {editingEmployeeId === emp.employee_id ? (
-                              <div className="flex items-center justify-end gap-1">
-                                <input type="number" value={editingEmployeeSalary} onChange={(e) => setEditingEmployeeSalary(e.target.value)}
-                                  className="w-20 field-input py-1 text-xs text-right" />
-                                <button type="button" onClick={() => handleUpdateEmployeeSalary(emp.employee_id)}
-                                  className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"><Save className="w-3.5 h-3.5" /></button>
-                                <button type="button" onClick={() => { setEditingEmployeeId(null); setEditingEmployeeSalary(''); }}
-                                  className="p-1 text-red-500 hover:bg-red-50 rounded"><X className="w-3.5 h-3.5" /></button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-end gap-2 group">
-                                <span>₹{emp.base_salary}</span>
-                                <button type="button" onClick={() => { setEditingEmployeeId(emp.employee_id); setEditingEmployeeSalary(emp.base_salary); }}
-                                  className="opacity-0 group-hover:opacity-100 p-0.5 text-brand-600 transition">
-                                  <Edit2 className="w-3 h-3" />
-                                </button>
-                              </div>
-                            )}
-                          </td>
-                          <td className="text-center">
-                            <button type="button" onClick={() => handleToggleSalary(emp.employee_id)}
-                              className={`px-3 py-1 rounded text-2xs font-bold uppercase tracking-wide transition ${
-                                emp.status === 'Paid' ? 'badge-green' : 'badge-amber'
-                              }`}>
-                              {emp.status === 'Paid' ? 'Paid' : 'Unpaid'}
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* REVENUE CHART MODAL */}
-      {showRevenueChartModal && (
-        <div className="modal-overlay" onClick={() => setShowRevenueChartModal(false)}>
-          <div className="modal-panel max-w-3xl" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900">Daily Revenue</h3>
-                <p className="text-xs text-gray-400 mt-0.5">Advances collected + completed order balances</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <Calendar className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-gray-400" />
-                  <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="field-input pl-8 py-2 text-xs appearance-none cursor-pointer w-40">
-                    {monthsList.map((m) => <option key={m.val} value={m.val}>{m.label}</option>)}
-                  </select>
-                  <ChevronDown className="absolute right-2.5 top-2.5 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                </div>
-                <button className="btn-ghost p-1.5" onClick={() => setShowRevenueChartModal(false)}><X className="w-4 h-4" /></button>
-              </div>
-            </div>
-            <div className="p-6 bg-white">
-              {isLoadingDaily ? (
-                <div className="py-20 text-center text-sm text-gray-400">Generating chart...</div>
-              ) : (
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  {renderRevenueChart()}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* PROFIT CHART MODAL */}
-      {showProfitChartModal && (
-        <div className="modal-overlay" onClick={() => setShowProfitChartModal(false)}>
-          <div className="modal-panel max-w-3xl" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900">Daily Profit / Loss</h3>
-                <p className="text-xs text-gray-400 mt-0.5">Net revenue after all monthly expenses</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <Calendar className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-gray-400" />
-                  <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="field-input pl-8 py-2 text-xs appearance-none cursor-pointer w-40">
-                    {monthsList.map((m) => <option key={m.val} value={m.val}>{m.label}</option>)}
-                  </select>
-                  <ChevronDown className="absolute right-2.5 top-2.5 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                </div>
-                <button className="btn-ghost p-1.5" onClick={() => setShowProfitChartModal(false)}><X className="w-4 h-4" /></button>
-              </div>
-            </div>
-            <div className="p-6 bg-white">
-              {isLoadingDaily ? (
-                <div className="py-20 text-center text-sm text-gray-400">Generating chart...</div>
-              ) : (
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  {renderProfitChart()}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-    </div>
-  );
-}

@@ -1,35 +1,132 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap');
+/* Inter — industry standard for data-heavy SaaS. Used by Vercel, Linear, Stripe, Notion. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  body {
-    @apply bg-slate-900 text-slate-100 font-sans antialiased selection:bg-brand-500 selection:text-white overflow-x-hidden;
-    background-color: #0b0f19;
+  *, *::before, *::after {
+    box-sizing: border-box;
   }
-  
-  /* Scrollbar Styling */
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11"; /* Inter optical features */
+  }
+
+  body {
+    @apply bg-gray-50 text-gray-900 font-sans antialiased overflow-x-hidden;
+    /* True neutral gray — NO blue tint, no dark void background */
+    background-color: #f9fafb;
+    color: #111827;
+  }
+
+  /* Tight, professional scrollbar — matches Shopify Admin / Linear aesthetic */
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
   }
   ::-webkit-scrollbar-track {
-    @apply bg-slate-950;
+    background: #f3f4f6;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-slate-800 rounded-full hover:bg-slate-700;
+    background: #d1d5db;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
   }
 }
 
-.glass-panel {
-  background: rgba(17, 24, 39, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
+@layer components {
+  /* ----- CARD: Standard bordered white card used across the app ----- */
+  .card {
+    @apply bg-white border border-gray-200 rounded-lg;
+  }
 
-.canvas-shadow {
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+  /* ----- SECTION HEADER: Dry, uppercase label above data blocks ----- */
+  .section-label {
+    @apply text-2xs font-semibold uppercase tracking-widest text-gray-400;
+  }
+
+  /* ----- FORM FIELD: Flat, solid inputs. No dark void, no glow. ----- */
+  .field-input {
+    @apply w-full px-3 py-2 bg-white border border-gray-300 rounded-md
+           text-sm text-gray-900 placeholder-gray-400
+           focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500
+           transition-colors duration-150;
+  }
+
+  /* ----- BUTTON - Primary action ----- */
+  .btn-primary {
+    @apply px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold
+           rounded-md transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed
+           flex items-center gap-2;
+  }
+
+  /* ----- BUTTON - Secondary (outlined) ----- */
+  .btn-secondary {
+    @apply px-4 py-2 bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold
+           border border-gray-300 rounded-md transition-colors duration-150
+           flex items-center gap-2;
+  }
+
+  /* ----- BUTTON - Ghost (text only) ----- */
+  .btn-ghost {
+    @apply px-3 py-1.5 text-gray-500 hover:text-gray-800 hover:bg-gray-100
+           text-sm font-medium rounded-md transition-colors duration-150
+           flex items-center gap-1.5;
+  }
+
+  /* ----- BADGE - Status pill ----- */
+  .badge-green {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-2xs font-semibold
+           uppercase tracking-wide bg-emerald-50 text-emerald-700 border border-emerald-200;
+  }
+  .badge-red {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-2xs font-semibold
+           uppercase tracking-wide bg-red-50 text-red-600 border border-red-200;
+  }
+  .badge-amber {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-2xs font-semibold
+           uppercase tracking-wide bg-amber-50 text-amber-700 border border-amber-200;
+  }
+
+  /* ----- DATA TABLE: Clean, dense, high-contrast. Like Stripe or Shopify admin. ----- */
+  .data-table {
+    @apply w-full text-left border-collapse text-sm;
+  }
+  .data-table thead tr {
+    @apply border-b border-gray-200 bg-gray-50;
+  }
+  .data-table thead th {
+    @apply py-2.5 px-4 text-2xs font-semibold uppercase tracking-wider text-gray-500;
+  }
+  .data-table tbody tr {
+    @apply border-b border-gray-100 hover:bg-gray-50 transition-colors duration-100 cursor-pointer;
+  }
+  .data-table tbody td {
+    @apply py-3 px-4 text-sm text-gray-700;
+  }
+
+  /* ----- MODAL OVERLAY ----- */
+  .modal-overlay {
+    @apply fixed inset-0 bg-gray-900/50 flex items-center justify-center p-4 z-50;
+  }
+  .modal-panel {
+    @apply bg-white rounded-xl border border-gray-200 shadow-xl w-full flex flex-col overflow-hidden;
+  }
+  .modal-header {
+    @apply flex items-center justify-between px-6 py-4 border-b border-gray-100;
+  }
+
+  /* ----- STAT CARD: Small KPI widget ----- */
+  .stat-card {
+    @apply card p-4 flex items-center gap-3.5;
+  }
+  .stat-icon {
+    @apply p-2.5 rounded-lg flex-shrink-0;
+  }
 }

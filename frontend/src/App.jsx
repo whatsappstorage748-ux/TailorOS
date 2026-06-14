@@ -3,104 +3,75 @@ import Dashboard from './components/Dashboard';
 import OrderForm from './components/OrderForm';
 import CustomerHistory from './components/CustomerHistory';
 import Analytics from './components/Analytics';
-import { Scissors, LayoutDashboard, History, Ruler, BarChart } from 'lucide-react';
+import { Scissors, LayoutDashboard, UserSearch, ClipboardList, BarChart2, ChevronRight } from 'lucide-react';
+
+const NAV_ITEMS = [
+  { id: 'create',    label: 'New Order',       icon: ClipboardList },
+  { id: 'dashboard', label: 'Dashboard',        icon: LayoutDashboard },
+  { id: 'history',   label: 'Customers',        icon: UserSearch },
+  { id: 'analytics', label: 'Sales & Expenses', icon: BarChart2 },
+];
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('create');
-  // Trigger database refreshes on other tabs when an order is created or completed
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  const handleOrderCreated = (order) => {
+  const handleOrderCreated = () => {
     setRefreshTrigger(prev => prev + 1);
-    setTimeout(() => {
-      setActiveTab('dashboard');
-    }, 1500);
+    setTimeout(() => setActiveTab('dashboard'), 1200);
   };
 
-  return (
-    <div className="flex flex-col h-screen bg-[#0b0f19] font-sans overflow-hidden select-none relative">
-      
-      {/* FLOATING NAVIGATION ISLAND (3D shadows in the air) */}
-      <div className="fixed top-4 right-8 z-50 flex items-center space-x-3 bg-slate-900/80 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-800 shadow-[0_12px_40px_rgba(0,0,0,0.6)]">
-        <button
-          onClick={() => setActiveTab('create')}
-          className={`p-2.5 rounded-xl transition-all duration-300 ${
-            activeTab === 'create'
-              ? 'bg-brand-600 text-white shadow-[0_8px_20px_rgba(14,130,235,0.45)] scale-110 -translate-y-1'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-          }`}
-          title="New Measurement Order"
-        >
-          <Ruler className="w-5 h-5" />
-        </button>
-        <button
-          onClick={() => setActiveTab('dashboard')}
-          className={`p-2.5 rounded-xl transition-all duration-300 ${
-            activeTab === 'dashboard'
-              ? 'bg-brand-600 text-white shadow-[0_8px_20px_rgba(14,130,235,0.45)] scale-110 -translate-y-1'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-          }`}
-          title="Dashboard & Search"
-        >
-          <LayoutDashboard className="w-5 h-5" />
-        </button>
-        <button
-          onClick={() => setActiveTab('history')}
-          className={`p-2.5 rounded-xl transition-all duration-300 ${
-            activeTab === 'history'
-              ? 'bg-brand-600 text-white shadow-[0_8px_20px_rgba(14,130,235,0.45)] scale-110 -translate-y-1'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-          }`}
-          title="Customer CRM Registry"
-        >
-          <History className="w-5 h-5" />
-        </button>
-        <button
-          onClick={() => setActiveTab('analytics')}
-          className={`p-2.5 rounded-xl transition-all duration-300 ${
-            activeTab === 'analytics'
-              ? 'bg-brand-600 text-white shadow-[0_8px_20px_rgba(14,130,235,0.45)] scale-110 -translate-y-1'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-          }`}
-          title="Earnings & CRM Analytics"
-        >
-          <BarChart className="w-5 h-5" />
-        </button>
-      </div>
+  const activeItem = NAV_ITEMS.find(n => n.id === activeTab);
 
-      {/* HEADER BAR */}
-      <header className="h-20 border-b border-slate-900/60 bg-slate-900/10 backdrop-blur-md px-8 flex items-center justify-between z-20 shrink-0">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-brand-600 rounded-lg text-white shadow-md shadow-brand-500/20">
-            <Scissors className="w-5 h-5 rotate-90" />
+  return (
+    <div className="flex flex-col h-screen bg-gray-50 font-sans overflow-hidden">
+
+      {/* ── TOP NAVIGATION BAR ──────────────────────────────────── */}
+      <header className="h-14 bg-white border-b border-gray-200 flex items-center px-5 gap-6 z-30 flex-shrink-0 shadow-sm">
+
+        {/* Brand */}
+        <div className="flex items-center gap-2.5 mr-4">
+          <div className="p-1.5 bg-brand-600 rounded-md text-white">
+            <Scissors className="w-4 h-4 rotate-90" />
           </div>
-          <div>
-            <h1 className="text-sm font-black text-slate-100 uppercase tracking-widest leading-none">Captain Tailors</h1>
-            <span className="text-[10px] text-brand-400 font-bold uppercase tracking-wider">
-              {activeTab === 'create' && 'New Measurement Order'}
-              {activeTab === 'dashboard' && 'Operations Dashboard'}
-              {activeTab === 'history' && 'Customer CRM Registry'}
-              {activeTab === 'analytics' && 'Business Earnings & CRM Analytics'}
-            </span>
-          </div>
+          <span className="text-sm font-bold text-gray-900 tracking-tight">Captain Tailors</span>
+        </div>
+
+        {/* Navigation links — horizontal, inline, like Shopify Admin */}
+        <nav className="flex items-center gap-1">
+          {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-150 ${
+                activeTab === id
+                  ? 'bg-brand-50 text-brand-700'
+                  : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        {/* Breadcrumb right — functional label */}
+        <div className="ml-auto flex items-center gap-1.5 text-xs text-gray-400">
+          <span className="font-medium text-gray-700">Captain Tailors</span>
+          <ChevronRight className="w-3 h-3" />
+          <span>{activeItem?.label}</span>
         </div>
       </header>
 
-      {/* Workspace Content */}
-      <div className="flex-1 overflow-y-auto px-8 py-6 w-full max-w-7xl mx-auto flex flex-col">
-        {activeTab === 'create' && (
-          <OrderForm onOrderCreated={handleOrderCreated} />
-        )}
-        {activeTab === 'dashboard' && (
-          <Dashboard refreshTrigger={refreshTrigger} />
-        )}
-        {activeTab === 'history' && (
-          <CustomerHistory />
-        )}
-        {activeTab === 'analytics' && (
-          <Analytics />
-        )}
-      </div>
+      {/* ── MAIN CONTENT ────────────────────────────────────────── */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-7xl mx-auto px-5 py-6">
+          {activeTab === 'create'    && <OrderForm    onOrderCreated={handleOrderCreated} />}
+          {activeTab === 'dashboard' && <Dashboard    refreshTrigger={refreshTrigger} />}
+          {activeTab === 'history'   && <CustomerHistory />}
+          {activeTab === 'analytics' && <Analytics />}
+        </div>
+      </main>
 
     </div>
   );
