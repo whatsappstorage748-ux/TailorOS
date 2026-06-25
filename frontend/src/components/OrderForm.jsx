@@ -13,7 +13,7 @@ const handlePrintInvoice = (selectedOrder) => {
   const shopName = owner.shop_name || 'Captain Tailors';
   const shopEmail = owner.email || 'info@captaintailors.com';
   const shopContact = owner.contact_number || '+91 98765 43210';
-  const shopLogo = owner.shop_logo ? `http://localhost:5000/${owner.shop_logo}` : '';
+  const shopLogo = owner.shop_logo ? `${API_BASE}/${owner.shop_logo}` : '';
   const printWindow = window.open('', '_blank', 'width=900,height=800');
   
   const itemsHtml = (items || []).map(item => `

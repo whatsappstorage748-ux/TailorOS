@@ -2,6 +2,10 @@ import React, { useState } from 'react';
 import { Scissors, User, Lock, Mail, Phone, Camera, ArrowLeft } from 'lucide-react';
 import { auth, googleProvider, signInWithPopup } from '../firebase';
 
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? `http://${window.location.hostname}:5000`
+  : 'https://tailoros-production.up.railway.app';
+
 export default function AuthPage({ onLogin, initialPlan, onBackToLanding }) {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
@@ -55,7 +59,7 @@ export default function AuthPage({ onLogin, initialPlan, onBackToLanding }) {
       
       setGoogleIdToken(idToken);
  
-       const res = await fetch('http://localhost:5000/api/auth/google-login', {
+       const res = await fetch(`${API_BASE}/api/auth/google-login`, {
          method: 'POST',
          headers: { 'Content-Type': 'application/json' },
          body: JSON.stringify({ id_token: idToken })
@@ -92,7 +96,7 @@ export default function AuthPage({ onLogin, initialPlan, onBackToLanding }) {
     setIsLoading(true);
 
     try {
-      const res = await fetch('http://localhost:5000/api/auth/google-signup', {
+      const res = await fetch(`${API_BASE}/api/auth/google-signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -127,7 +131,7 @@ export default function AuthPage({ onLogin, initialPlan, onBackToLanding }) {
       : { email, password, shop_name: shopName, contact_number: contactNumber, shop_logo: logoBase64 };
 
     try {
-      const response = await fetch(`http://localhost:5000${endpoint}`, {
+      const response = await fetch(`${API_BASE}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

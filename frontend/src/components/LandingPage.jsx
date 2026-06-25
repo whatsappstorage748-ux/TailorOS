@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import * as Icons from 'lucide-react';
 
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? `http://${window.location.hostname}:5000`
+  : 'https://tailoros-production.up.railway.app';
+
 export default function LandingPage({ onSelectPlan, onSignIn }) {
   const [cms, setCms] = useState({
     hero: {
@@ -26,7 +30,7 @@ export default function LandingPage({ onSelectPlan, onSignIn }) {
   const [openFaqIndex, setOpenFaqIndex] = useState(null);
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/admin/cms')
+    fetch(`${API_BASE}/api/admin/cms`)
       .then(res => res.json())
       .then(data => {
         if (data && !data.message) {

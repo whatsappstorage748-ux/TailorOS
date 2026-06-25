@@ -5,6 +5,11 @@ import {
   ArrowUpRight, ArrowLeft, Loader2, CreditCard, Clock, MessageSquare
 } from 'lucide-react';
 
+
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? `http://${window.location.hostname}:5000`
+  : 'https://tailoros-production.up.railway.app';
+
 export default function AdminPanel() {
   const [token, setToken] = useState(localStorage.getItem('tailor_admin_token'));
   const [needsSetup, setNeedsSetup] = useState(false);
@@ -77,7 +82,7 @@ export default function AdminPanel() {
 
   const checkSetupStatus = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/admin/setup-check');
+      const res = await fetch('${API_BASE}/api/admin/setup-check');
       const data = await res.json();
       setNeedsSetup(data.needsSetup);
     } catch (err) {
@@ -94,7 +99,7 @@ export default function AdminPanel() {
 
     const endpoint = needsSetup ? '/api/admin/setup' : '/api/admin/login';
     try {
-      const res = await fetch(`http://localhost:5000${endpoint}`, {
+      const res = await fetch(`${API_BASE}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -133,19 +138,19 @@ export default function AdminPanel() {
   const loadDashboardData = async () => {
     try {
       if (activeTab === 'overview') {
-        const res = await adminFetch('http://localhost:5000/api/admin/stats');
+        const res = await adminFetch('${API_BASE}/api/admin/stats');
         const data = await res.json();
         setStats(data);
       } else if (activeTab === 'users') {
-        const res = await adminFetch('http://localhost:5000/api/admin/users');
+        const res = await adminFetch('${API_BASE}/api/admin/users');
         const data = await res.json();
         setShops(data.users || []);
       } else if (activeTab === 'audit') {
-        const res = await adminFetch('http://localhost:5000/api/admin/audit-logs');
+        const res = await adminFetch('${API_BASE}/api/admin/audit-logs');
         const data = await res.json();
         setAuditLogs(data.logs || []);
       } else if (activeTab === 'cms') {
-        const res = await fetch('http://localhost:5000/api/admin/cms');
+        const res = await fetch('${API_BASE}/api/admin/cms');
         const data = await res.json();
         setCms(data);
         setHeroHeading(data.hero.main_heading);
@@ -164,7 +169,7 @@ export default function AdminPanel() {
     setLoadingDetails(true);
     setShopDetails(null);
     try {
-      const res = await adminFetch(`http://localhost:5000/api/admin/users/${shop.id}`);
+      const res = await adminFetch(`${API_BASE}/api/admin/users/${shop.id}`);
       const data = await res.json();
       setShopDetails(data.metrics);
       setChangePlanValue(shop.subscription_tier);
@@ -178,7 +183,7 @@ export default function AdminPanel() {
   // Moderation Action handlers
   const handleSuspend = async (shopId, action) => {
     try {
-      const res = await adminFetch(`http://localhost:5000/api/admin/users/${shopId}/${action}`, { method: 'POST' });
+      const res = await adminFetch(`${API_BASE}/api/admin/users/${shopId}/${action}`, { method: 'POST' });
       if (res.ok) {
         // reload
         loadDashboardData();
@@ -191,7 +196,7 @@ export default function AdminPanel() {
 
   const handleExtendTrial = async (shopId) => {
     try {
-      const res = await adminFetch(`http://localhost:5000/api/admin/users/${shopId}/extend-trial`, {
+      const res = await adminFetch(`${API_BASE}/api/admin/users/${shopId}/extend-trial`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ days: extendDays })
@@ -207,7 +212,7 @@ export default function AdminPanel() {
 
   const handleChangePlan = async (shopId) => {
     try {
-      const res = await adminFetch(`http://localhost:5000/api/admin/users/${shopId}/change-plan`, {
+      const res = await adminFetch(`${API_BASE}/api/admin/users/${shopId}/change-plan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan: changePlanValue })
@@ -224,7 +229,7 @@ export default function AdminPanel() {
   const handleResetTrial = async (shopId) => {
     if (!window.confirm('Reset this shop to a fresh 14-day free trial?')) return;
     try {
-      const res = await adminFetch(`http://localhost:5000/api/admin/users/${shopId}/reset`, { method: 'POST' });
+      const res = await adminFetch(`${API_BASE}/api/admin/users/${shopId}/reset`, { method: 'POST' });
       if (res.ok) {
         loadDashboardData();
         setSelectedShop(null);
@@ -238,7 +243,7 @@ export default function AdminPanel() {
   const handleSaveHero = async (e) => {
     e.preventDefault();
     try {
-      const res = await adminFetch('http://localhost:5000/api/admin/cms/hero', {
+      const res = await adminFetch('${API_BASE}/api/admin/cms/hero', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -260,7 +265,7 @@ export default function AdminPanel() {
   const handleSaveBranding = async (e) => {
     e.preventDefault();
     try {
-      const res = await adminFetch('http://localhost:5000/api/admin/cms/branding', {
+      const res = await adminFetch('${API_BASE}/api/admin/cms/branding', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -281,7 +286,7 @@ export default function AdminPanel() {
   const handleAddFeature = async (e) => {
     e.preventDefault();
     try {
-      const res = await adminFetch('http://localhost:5000/api/admin/cms/features', {
+      const res = await adminFetch('${API_BASE}/api/admin/cms/features', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -304,7 +309,7 @@ export default function AdminPanel() {
   const handleDeleteFeature = async (id) => {
     if (!window.confirm('Delete this feature card?')) return;
     try {
-      const res = await adminFetch(`http://localhost:5000/api/admin/cms/features/${id}`, { method: 'DELETE' });
+      const res = await adminFetch(`${API_BASE}/api/admin/cms/features/${id}`, { method: 'DELETE' });
       if (res.ok) loadDashboardData();
     } catch (err) {
       console.error(err);
@@ -314,7 +319,7 @@ export default function AdminPanel() {
   const handleAddFAQ = async (e) => {
     e.preventDefault();
     try {
-      const res = await adminFetch('http://localhost:5000/api/admin/cms/faqs', {
+      const res = await adminFetch('${API_BASE}/api/admin/cms/faqs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -336,7 +341,7 @@ export default function AdminPanel() {
   const handleDeleteFAQ = async (id) => {
     if (!window.confirm('Delete this FAQ item?')) return;
     try {
-      const res = await adminFetch(`http://localhost:5000/api/admin/cms/faqs/${id}`, { method: 'DELETE' });
+      const res = await adminFetch(`${API_BASE}/api/admin/cms/faqs/${id}`, { method: 'DELETE' });
       if (res.ok) loadDashboardData();
     } catch (err) {
       console.error(err);
@@ -353,7 +358,7 @@ export default function AdminPanel() {
   const handleSavePlan = async (e) => {
     e.preventDefault();
     try {
-      const res = await adminFetch('http://localhost:5000/api/admin/cms/plans', {
+      const res = await adminFetch('${API_BASE}/api/admin/cms/plans', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -16,6 +16,10 @@ const NAV_ITEMS = [
   { id: 'analytics', label: 'Sales & Expenses', icon: BarChart2 },
 ];
 
+export const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? `http://${window.location.hostname}:5000`
+  : 'https://tailoros-production.up.railway.app';
+
 // Helper to wrap fetch and automatically add Authorization header
 export const fetchWithAuth = async (url, options = {}) => {
   const token = localStorage.getItem('tailor_token');
@@ -56,7 +60,7 @@ export default function App() {
 
   const loadUserProfile = async () => {
     try {
-      const res = await fetchWithAuth('http://localhost:5000/api/auth/profile');
+      const res = await fetchWithAuth(`${API_BASE}/api/auth/profile`);
       if (res.ok) {
         const data = await res.json();
         setUser(data.owner);
