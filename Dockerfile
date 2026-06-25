@@ -1,5 +1,5 @@
 # Stage 1: Build the React frontend
-FROM node:18-slim AS frontend-builder
+FROM node:22-slim AS frontend-builder
 WORKDIR /frontend
 COPY frontend/package*.json ./
 RUN npm ci
@@ -7,7 +7,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Create the production server image
-FROM node:18-slim
+FROM node:22-slim
 
 # Install Chromium and required dependencies for Puppeteer/headless browser execution
 RUN apt-get update && apt-get install -y \
