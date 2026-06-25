@@ -5,7 +5,7 @@ import { Plus, Trash2, CheckCircle2, User, Phone, Scissors, AlertCircle, CheckCi
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? `http://${window.location.hostname}:5000`
-  : 'https://captain-tailors.loca.lt';
+  : 'https://tailoros-production.up.railway.app';
 
 const handlePrintInvoice = (selectedOrder) => {
   const { order, customer, items } = selectedOrder;

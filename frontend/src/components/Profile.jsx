@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { User, Shield, Camera, Check, CreditCard, Loader2, Sparkles, Clock, AlertTriangle, MessageSquare, RefreshCw } from 'lucide-react';
 import { fetchWithAuth } from '../App';
 
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? `http://${window.location.hostname}:5000`
+  : 'https://tailoros-production.up.railway.app';
+
 export default function Profile() {
   const [owner, setOwner] = useState(null);
   const [shopName, setShopName] = useState('');
@@ -29,7 +33,7 @@ export default function Profile() {
   const checkWhatsAppStatus = async (showLoading = false) => {
     if (showLoading) setWhatsappLoading(true);
     try {
-      const res = await fetchWithAuth('http://localhost:5000/api/whatsapp/status');
+      const res = await fetchWithAuth(`${API_BASE}/api/whatsapp/status`);
       if (res.ok) {
         const data = await res.json();
         setWhatsappStatus(data.status);
@@ -47,7 +51,7 @@ export default function Profile() {
     if (!window.confirm('Are you sure you want to disconnect this WhatsApp device?')) return;
     setWhatsappLoading(true);
     try {
-      const res = await fetchWithAuth('http://localhost:5000/api/whatsapp/logout', {
+      const res = await fetchWithAuth(`${API_BASE}/api/whatsapp/logout`, {
         method: 'POST'
       });
       if (res.ok) {
@@ -76,14 +80,14 @@ export default function Profile() {
 
   const loadProfile = async () => {
     try {
-      const res = await fetchWithAuth('http://localhost:5000/api/auth/profile');
+      const res = await fetchWithAuth(`${API_BASE}/api/auth/profile`);
       if (res.ok) {
         const data = await res.json();
         setOwner(data.owner);
         setShopName(data.owner.shop_name);
         setContactNumber(data.owner.contact_number);
         if (data.owner.shop_logo) {
-          setLogoPreview(`http://localhost:5000/${data.owner.shop_logo}`);
+          setLogoPreview(`${API_BASE}/${data.owner.shop_logo}`);
         }
       }
     } catch (err) {
@@ -110,7 +114,7 @@ export default function Profile() {
     setSaving(true);
 
     try {
-      const res = await fetchWithAuth('http://localhost:5000/api/auth/profile', {
+      const res = await fetchWithAuth(`${API_BASE}/api/auth/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -146,7 +150,7 @@ export default function Profile() {
       // Simulate network request
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      const res = await fetchWithAuth('http://localhost:5000/api/auth/subscribe', {
+      const res = await fetchWithAuth(`${API_BASE}/api/auth/subscribe`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
