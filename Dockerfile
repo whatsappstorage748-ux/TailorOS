@@ -2,7 +2,7 @@
 FROM node:22-slim AS frontend-builder
 WORKDIR /frontend
 COPY frontend/package*.json ./
-RUN npm ci
+RUN npm install
 COPY frontend/ ./
 RUN npm run build
 
@@ -29,7 +29,7 @@ WORKDIR /app
 
 # Copy package management files from backend and install production dependencies
 COPY backend/package*.json ./
-RUN npm ci --only=production
+RUN npm install --omit=dev
 
 # Copy Prisma schema from backend and run client generation
 COPY backend/prisma ./prisma
