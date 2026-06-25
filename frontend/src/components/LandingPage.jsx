@@ -3,7 +3,7 @@ import * as Icons from 'lucide-react';
 
 const API_BASE = ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '' && !window.Capacitor)
   ? `http://${window.location.hostname}:5000`
-  : 'https://tailoros-production.up.railway.app';
+  : (window.Capacitor ? 'https://tailoros-production.up.railway.app' : window.location.origin);
 
 export default function LandingPage({ onSelectPlan, onSignIn }) {
   const [cms, setCms] = useState({

@@ -6,7 +6,7 @@ import { fetchWithCache, isOnline, queueOfflineRequest } from '../utils/syncMana
 
 const API_BASE = ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '' && !window.Capacitor)
   ? `http://${window.location.hostname}:5000`
-  : 'https://tailoros-production.up.railway.app';
+  : (window.Capacitor ? 'https://tailoros-production.up.railway.app' : window.location.origin);
 
 const fmt = (dateStr) => {
   if (!dateStr) return '—';

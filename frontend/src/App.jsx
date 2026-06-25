@@ -19,7 +19,7 @@ const NAV_ITEMS = [
 
 export const API_BASE = ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '' && !window.Capacitor)
   ? `http://${window.location.hostname}:5000`
-  : 'https://tailoros-production.up.railway.app';
+  : (window.Capacitor ? 'https://tailoros-production.up.railway.app' : window.location.origin);
 
 // Helper to wrap fetch and automatically add Authorization header
 export const fetchWithAuth = async (url, options = {}) => {

@@ -6,7 +6,7 @@ import { fetchWithCache } from '../utils/syncManager';
 
 const API_BASE = ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '' && !window.Capacitor)
   ? `http://${window.location.hostname}:5000`
-  : 'https://tailoros-production.up.railway.app';
+  : (window.Capacitor ? 'https://tailoros-production.up.railway.app' : window.location.origin);
 
 const fmt  = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 const fmtDt = (d) => d ? new Date(d).toLocaleString('en-IN',  { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';

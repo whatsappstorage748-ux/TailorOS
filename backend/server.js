@@ -151,6 +151,18 @@ const seedCMSIfEmpty = async () => {
   }
 };
 
+// Serve static frontend files from 'public' folder in production
+const publicPath = path.resolve('public');
+app.use(express.static(publicPath));
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(publicPath, 'index.html'), (err) => {
+    if (err) {
+      res.status(404).send('Static index.html not found. Backend server is active.');
+    }
+  });
+});
+
 app.listen(PORT, async () => {
   try {
     await prisma.$connect();

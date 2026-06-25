@@ -1,3 +1,12 @@
+# Stage 1: Build the React frontend
+FROM node:18-slim AS frontend-builder
+WORKDIR /frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+# Stage 2: Create the production server image
 FROM node:18-slim
 
 # Install Chromium and required dependencies for Puppeteer/headless browser execution
@@ -26,8 +35,11 @@ RUN npm ci --only=production
 COPY backend/prisma ./prisma
 RUN npx prisma generate
 
-# Copy the rest of the backend source files
+# Copy the backend source files
 COPY backend/ .
+
+# Copy the built frontend static files from Stage 1 into backend's public directory
+COPY --from=frontend-builder /frontend/dist ./public
 
 # Expose the Express port
 EXPOSE 5000
