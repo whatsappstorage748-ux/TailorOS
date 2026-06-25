@@ -164,10 +164,14 @@ const initializeClient = () => {
     }
 
     const chromePaths = [
+        process.env.PUPPETEER_EXECUTABLE_PATH,
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
         'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
         'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
         'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
-    ];
+    ].filter(Boolean);
+
 
     let executablePath;
     for (const p of chromePaths) {
