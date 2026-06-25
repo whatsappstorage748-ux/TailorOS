@@ -2,6 +2,7 @@ import { fetchWithAuth } from '../App';
 import React, { useState, useEffect } from 'react';
 import { Search, Phone, Calendar, Eye, X, ChevronRight, Users, ArrowUpDown, Printer } from 'lucide-react';
 import { renderBillNumber } from './OrderForm';
+import { fetchWithCache } from '../utils/syncManager';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? `http://${window.location.hostname}:5000`
@@ -539,30 +540,35 @@ export default function CustomerHistory() {
   const fetchCustomers = async () => {
     setIsLoadingList(true);
     try {
-      const res  = await fetchWithAuth(`${API_BASE}/api/customers?q=${searchQuery}`);
-      const data = await res.json();
-      if (res.ok) {
-        let list = [...(data.customers || [])];
-        if (sortBy === 'newest')         list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-        else if (sortBy === 'oldest')    list.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-        else if (sortBy === 'highest')   list.sort((a, b) => b.order_count - a.order_count);
-        else if (sortBy === 'lowest')    list.sort((a, b) => a.order_count - b.order_count);
-        setCustomers(list);
-        if (list.length > 0 && !selectedCustomer) setSelectedCustomer(list[0]);
-      }
+      const data = await fetchWithCache(`${API_BASE}/api/customers?q=${searchQuery}`, searchQuery ? `customers_search_${searchQuery}` : 'customers_list', { customers: [] });
+      let list = [...(data.customers || [])];
+      if (sortBy === 'newest')         list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      else if (sortBy === 'oldest')    list.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      else if (sortBy === 'highest')   list.sort((a, b) => b.order_count - a.order_count);
+      else if (sortBy === 'lowest')    list.sort((a, b) => a.order_count - b.order_count);
+      setCustomers(list);
+      if (list.length > 0 && !selectedCustomer) setSelectedCustomer(list[0]);
     } catch (e) { console.error(e); } finally { setIsLoadingList(false); }
   };
 
   const fetchHistory = async (mobile) => {
     setIsLoadingHistory(true);
     try {
-      const res  = await fetchWithAuth(`${API_BASE}/api/customers/${mobile}/history`);
-      const data = await res.json();
-      setOrders(res.ok ? (data.orders || []) : []);
+      const data = await fetchWithCache(`${API_BASE}/api/customers/${mobile}/history`, `customer_history_${mobile}`, { orders: [] });
+      setOrders(data.orders || []);
     } catch (e) { setOrders([]); } finally { setIsLoadingHistory(false); }
   };
 
   const openOrder = async (billNo) => {
+    // Find locally first
+    const localOrder = orders.find(o => o.bill_number === billNo);
+    if (localOrder && selectedCustomer) {
+      setSelectedOrder({
+        order: localOrder,
+        customer: { customer_name: selectedCustomer.customer_name, mobile_number: selectedCustomer.mobile_number },
+        items: localOrder.items || []
+      });
+    }
     try {
       const res = await fetchWithAuth(`${API_BASE}/api/orders/${billNo}`);
       if (res.ok) setSelectedOrder(await res.json());

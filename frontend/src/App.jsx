@@ -8,6 +8,7 @@ import LandingPage from './components/LandingPage';
 import AdminPanel from './components/AdminPanel';
 import Profile from './components/Profile';
 import { Scissors, LayoutDashboard, UserSearch, ClipboardList, BarChart2, LogOut, Menu, User, Shield, CreditCard } from 'lucide-react';
+import { isOnline, syncPendingData } from './utils/syncManager';
 
 const NAV_ITEMS = [
   { id: 'create',    label: 'New Order',       icon: ClipboardList },
@@ -43,6 +44,9 @@ export default function App() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [user, setUser] = useState(null);
   
+  // Connection state
+  const [online, setOnline] = useState(isOnline());
+  
   // Landing Page view state
   const [view, setView] = useState('landing'); 
   const [selectedPlanIntent, setSelectedPlanIntent] = useState(null);
@@ -51,6 +55,32 @@ export default function App() {
   const [showDropdown, setShowDropdown] = useState(false);
 
   const isAdminRoute = window.location.pathname === '/admin';
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setOnline(true);
+      syncPendingData(() => {
+        setRefreshTrigger(prev => prev + 1);
+      });
+    };
+    const handleOffline = () => {
+      setOnline(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    if (isOnline()) {
+      syncPendingData(() => {
+        setRefreshTrigger(prev => prev + 1);
+      });
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     if (token) {
@@ -152,11 +182,21 @@ export default function App() {
       {/* ── TOP HEADER (Brand & Breadcrumb) ───────────────────── */}
       <header className="h-14 bg-white border-b border-gray-200 flex items-center px-4 sm:px-5 gap-4 sm:gap-6 z-30 flex-shrink-0 shadow-sm relative">
         {/* Brand */}
-        <div className="flex items-center gap-2.5 mr-auto sm:mr-4">
+        <div className="flex items-center gap-2.5 mr-4">
           <div className="p-1.5 bg-brand-600 rounded-md text-white">
             <Scissors className="w-4 h-4 rotate-90" />
           </div>
           <span className="text-sm font-bold text-gray-900 tracking-tight">TailorOS</span>
+        </div>
+
+        {/* Online/Offline Status Indicator */}
+        <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase border transition-all mr-auto ${
+          online 
+            ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+            : 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse'
+        }`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+          {online ? 'Cloud Sync Active' : 'Offline Mode'}
         </div>
 
         {/* Desktop Navigation links — hidden on mobile */}

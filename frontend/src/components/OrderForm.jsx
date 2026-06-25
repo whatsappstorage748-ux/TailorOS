@@ -2,6 +2,7 @@ import { fetchWithAuth } from '../App';
 import React, { useState, useEffect } from 'react';
 import Canvas from './Canvas';
 import { Plus, Trash2, CheckCircle2, User, Phone, Scissors, AlertCircle, CheckCircle, Printer, Edit3 } from 'lucide-react';
+import { fetchWithCache, queueOfflineOrder, isOnline } from '../utils/syncManager';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? `http://${window.location.hostname}:5000`
@@ -574,8 +575,7 @@ export default function OrderForm({ onOrderCreated }) {
   useEffect(() => {
     (async () => {
       try {
-        const res  = await fetchWithAuth(`${API_BASE}/api/cloth-configs`);
-        const data = await res.json();
+        const data = await fetchWithCache(`${API_BASE}/api/cloth-configs`, 'cloth_configs', { configs: [] });
         const cfgs = data.configs || [];
         setClothConfigs(cfgs);
         if (cfgs.length > 0) {
@@ -608,8 +608,7 @@ export default function OrderForm({ onOrderCreated }) {
     const timer = setTimeout(async () => {
       setIsCheckingCustomer(true);
       try {
-        const res  = await fetchWithAuth(`${API_BASE}/api/customers/${mobileNumber}`);
-        const data = await res.json();
+        const data = await fetchWithCache(`${API_BASE}/api/customers/${mobileNumber}`, `customer_${mobileNumber}`, { exists: false });
         if (data.exists && data.customer) {
           setCustomerName(data.customer.customer_name);
           setIsExistingCustomer(true);
@@ -683,6 +682,45 @@ export default function OrderForm({ onOrderCreated }) {
   const submitOrder = async (imageToSave) => {
     setIsSubmitting(true);
     setErrorMsg('');
+
+    if (!isOnline()) {
+      // Save offline
+      const offlinePayload = {
+        mobile_number: mobileNumber.trim(),
+        customer_name: customerName.trim(),
+        order_items: items,
+        total_amount: totalAmt,
+        advance_amount: parseFloat(advancePaid) || 0,
+        balance_amount: balanceAmt,
+        measurement_image: imageToSave,
+        use_latest_bill_series: useLatestBillSeries
+      };
+      
+      const offlineOrder = queueOfflineOrder(offlinePayload);
+      setSuccessMsg('Order saved locally! It will automatically backup to the cloud once you connect.');
+      setCreatedOrder({ order: offlineOrder });
+      
+      // Reset form states
+      setMobileNumber('');
+      setCustomerName('');
+      setIsExistingCustomer(false);
+      setInitialImage(null);
+      setOriginalCanvasData(null);
+      setCanvasReadOnly(false);
+      setUseLatestBillSeries(false);
+      setAdvancePaid(0);
+
+      const shirt = clothConfigs.find(c => c.cloth_type.toLowerCase() === 'shirt');
+      const pant  = clothConfigs.find(c => c.cloth_type.toLowerCase() === 'pant');
+      setItems([
+        { cloth_type: shirt?.cloth_type ?? 'Shirt', quantity: 1, price_per_cloth: shirt?.default_price ?? 500 },
+        { cloth_type: pant?.cloth_type  ?? 'Pant',  quantity: 1, price_per_cloth: pant?.default_price  ?? 600 },
+      ]);
+      setIsSubmitting(false);
+      if (onOrderCreated) onOrderCreated(offlineOrder);
+      return;
+    }
+
     try {
       const res  = await fetchWithAuth(`${API_BASE}/api/orders`, {
         method: 'POST',

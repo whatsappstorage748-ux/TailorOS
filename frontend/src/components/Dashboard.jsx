@@ -2,6 +2,7 @@ import { fetchWithAuth } from '../App';
 import React, { useState, useEffect } from 'react';
 import { Search, Package, CheckCircle, Clock, IndianRupee, Calendar, Eye, X, CheckCircle2, Printer } from 'lucide-react';
 import { renderBillNumber } from './OrderForm';
+import { fetchWithCache } from '../utils/syncManager';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? `http://${window.location.hostname}:5000`
@@ -558,12 +559,13 @@ export default function Dashboard({ refreshTrigger }) {
 
   const fetchData = async () => {
     try {
-      const statsRes = await fetchWithAuth(`${API_BASE}/api/dashboard/stats`);
-      setStats(await statsRes.json());
       setIsLoading(true);
-      const ordersRes = await fetchWithAuth(`${API_BASE}/api/orders/search?q=${searchQuery}`);
-      const d = await ordersRes.json();
-      setOrders(d.orders || []);
+      const statsData = await fetchWithCache(`${API_BASE}/api/dashboard/stats`, 'dashboard_stats', { totalOrders: 0, undeliveredOrders: 0, deliveredOrders: 0, todayRevenue: 0, todayOrders: 0 });
+      setStats(statsData);
+      
+      const cacheKey = searchQuery ? `orders_search_${searchQuery}` : 'dashboard_orders';
+      const ordersData = await fetchWithCache(`${API_BASE}/api/orders/search?q=${searchQuery}`, cacheKey, { orders: [] });
+      setOrders(ordersData.orders || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -574,6 +576,15 @@ export default function Dashboard({ refreshTrigger }) {
   useEffect(() => { fetchData(); }, [searchQuery, refreshTrigger]);
 
   const openOrder = async (billNo) => {
+    // Find locally first
+    const localOrder = orders.find(o => o.bill_number === billNo);
+    if (localOrder) {
+      setSelectedOrder({
+        order: localOrder,
+        customer: { customer_name: localOrder.customer_name || 'Customer', mobile_number: localOrder.mobile_number },
+        items: localOrder.items || []
+      });
+    }
     try {
       const res = await fetchWithAuth(`${API_BASE}/api/orders/${billNo}`);
       if (res.ok) setSelectedOrder(await res.json());
@@ -582,6 +593,8 @@ export default function Dashboard({ refreshTrigger }) {
 
   const handleComplete = async (billNo) => {
     setIsCompleting(true);
+    // Optimistic local state update for offline responsiveness
+    setOrders(prev => prev.map(o => o.bill_number === billNo ? { ...o, status: 'Delivered' } : o));
     try {
       const res = await fetchWithAuth(`${API_BASE}/api/orders/${billNo}/complete`, { method: 'PUT' });
       if (res.ok) {
@@ -594,6 +607,8 @@ export default function Dashboard({ refreshTrigger }) {
 
   const handleReady = async (billNo) => {
     setIsReadying(true);
+    // Optimistic local state update for offline responsiveness
+    setOrders(prev => prev.map(o => o.bill_number === billNo ? { ...o, status: 'Ready' } : o));
     try {
       const res = await fetchWithAuth(`${API_BASE}/api/orders/${billNo}/ready`, { method: 'PUT' });
       if (res.ok) {
