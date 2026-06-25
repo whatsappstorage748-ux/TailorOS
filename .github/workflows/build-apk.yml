@@ -44,7 +44,9 @@ jobs:
         working-directory: frontend
 
       - name: Build Debug APK with Gradle
-        run: ./gradlew assembleDebug
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
         working-directory: frontend/android
 
       - name: Upload Debug APK Artifact
