@@ -4,7 +4,7 @@ import Canvas from './Canvas';
 import { Plus, Trash2, CheckCircle2, User, Phone, Scissors, AlertCircle, CheckCircle, Printer, Edit3 } from 'lucide-react';
 import { fetchWithCache, queueOfflineOrder, isOnline } from '../utils/syncManager';
 
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+const API_BASE = ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '' && !window.Capacitor)
   ? `http://${window.location.hostname}:5000`
   : 'https://tailoros-production.up.railway.app';
 
@@ -762,7 +762,39 @@ export default function OrderForm({ onOrderCreated }) {
         setErrorMsg(data.message || 'Failed to save order.');
       }
     } catch (e) {
-      setErrorMsg('Network error. Check that the backend server is running.');
+      console.warn('Network error during online order submission, saving offline instead:', e);
+      const offlinePayload = {
+        mobile_number: mobileNumber.trim(),
+        customer_name: customerName.trim(),
+        order_items: items,
+        total_amount: totalAmt,
+        advance_amount: parseFloat(advancePaid) || 0,
+        balance_amount: balanceAmt,
+        measurement_image: imageToSave,
+        use_latest_bill_series: useLatestBillSeries
+      };
+      
+      const offlineOrder = queueOfflineOrder(offlinePayload);
+      setSuccessMsg('Saved locally due to connection error! It will backup once connection is restored.');
+      setCreatedOrder({ order: offlineOrder });
+      
+      // Reset form states
+      setMobileNumber('');
+      setCustomerName('');
+      setIsExistingCustomer(false);
+      setInitialImage(null);
+      setOriginalCanvasData(null);
+      setCanvasReadOnly(false);
+      setUseLatestBillSeries(false);
+      setAdvancePaid(0);
+
+      const shirt = clothConfigs.find(c => c.cloth_type.toLowerCase() === 'shirt');
+      const pant  = clothConfigs.find(c => c.cloth_type.toLowerCase() === 'pant');
+      setItems([
+        { cloth_type: shirt?.cloth_type ?? 'Shirt', quantity: 1, price_per_cloth: shirt?.default_price ?? 500 },
+        { cloth_type: pant?.cloth_type  ?? 'Pant',  quantity: 1, price_per_cloth: pant?.default_price  ?? 600 },
+      ]);
+      if (onOrderCreated) onOrderCreated(offlineOrder);
     } finally { setIsSubmitting(false); }
   };
 

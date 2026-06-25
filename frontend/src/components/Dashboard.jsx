@@ -2,9 +2,9 @@ import { fetchWithAuth } from '../App';
 import React, { useState, useEffect } from 'react';
 import { Search, Package, CheckCircle, Clock, IndianRupee, Calendar, Eye, X, CheckCircle2, Printer } from 'lucide-react';
 import { renderBillNumber } from './OrderForm';
-import { fetchWithCache } from '../utils/syncManager';
+import { fetchWithCache, isOnline, queueOfflineRequest } from '../utils/syncManager';
 
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+const API_BASE = ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '' && !window.Capacitor)
   ? `http://${window.location.hostname}:5000`
   : 'https://tailoros-production.up.railway.app';
 
@@ -591,10 +591,27 @@ export default function Dashboard({ refreshTrigger }) {
     } catch (err) { console.error(err); }
   };
 
+  const updateDashboardCacheStatus = (billNo, status) => {
+    const cachedOrdersName = 'tailor_cache_dashboard_orders';
+    const cachedOrders = JSON.parse(localStorage.getItem(cachedOrdersName) || '{"orders":[]}');
+    if (cachedOrders.orders) {
+      cachedOrders.orders = cachedOrders.orders.map(o => o.bill_number === billNo ? { ...o, status } : o);
+      localStorage.setItem(cachedOrdersName, JSON.stringify(cachedOrders));
+    }
+  };
+
   const handleComplete = async (billNo) => {
     setIsCompleting(true);
     // Optimistic local state update for offline responsiveness
     setOrders(prev => prev.map(o => o.bill_number === billNo ? { ...o, status: 'Delivered' } : o));
+    
+    if (!isOnline()) {
+      queueOfflineRequest(`/api/orders/${billNo}/complete`, 'PUT', {});
+      updateDashboardCacheStatus(billNo, 'Delivered');
+      setIsCompleting(false);
+      return;
+    }
+
     try {
       const res = await fetchWithAuth(`${API_BASE}/api/orders/${billNo}/complete`, { method: 'PUT' });
       if (res.ok) {
@@ -602,13 +619,25 @@ export default function Dashboard({ refreshTrigger }) {
         if (detail.ok) setSelectedOrder(await detail.json());
         fetchData();
       }
-    } catch (err) { console.error(err); } finally { setIsCompleting(false); }
+    } catch (err) {
+      console.warn('Network error marking order complete, queueing offline:', err);
+      queueOfflineRequest(`/api/orders/${billNo}/complete`, 'PUT', {});
+      updateDashboardCacheStatus(billNo, 'Delivered');
+    } finally { setIsCompleting(false); }
   };
 
   const handleReady = async (billNo) => {
     setIsReadying(true);
     // Optimistic local state update for offline responsiveness
     setOrders(prev => prev.map(o => o.bill_number === billNo ? { ...o, status: 'Ready' } : o));
+    
+    if (!isOnline()) {
+      queueOfflineRequest(`/api/orders/${billNo}/ready`, 'PUT', {});
+      updateDashboardCacheStatus(billNo, 'Ready');
+      setIsReadying(false);
+      return;
+    }
+
     try {
       const res = await fetchWithAuth(`${API_BASE}/api/orders/${billNo}/ready`, { method: 'PUT' });
       if (res.ok) {
@@ -616,7 +645,11 @@ export default function Dashboard({ refreshTrigger }) {
         if (detail.ok) setSelectedOrder(await detail.json());
         fetchData();
       }
-    } catch (err) { console.error(err); } finally { setIsReadying(false); }
+    } catch (err) {
+      console.warn('Network error marking order ready, queueing offline:', err);
+      queueOfflineRequest(`/api/orders/${billNo}/ready`, 'PUT', {});
+      updateDashboardCacheStatus(billNo, 'Ready');
+    } finally { setIsReadying(false); }
   };
 
   return (

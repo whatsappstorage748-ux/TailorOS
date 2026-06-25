@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, Shield, Camera, Check, CreditCard, Loader2, Sparkles, Clock, AlertTriangle, MessageSquare, RefreshCw } from 'lucide-react';
 import { fetchWithAuth } from '../App';
 
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+const API_BASE = ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '' && !window.Capacitor)
   ? `http://${window.location.hostname}:5000`
   : 'https://tailoros-production.up.railway.app';
 

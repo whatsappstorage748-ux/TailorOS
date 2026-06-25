@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Scissors, User, Lock, Mail, Phone, Camera, ArrowLeft } from 'lucide-react';
-import { auth, googleProvider, signInWithPopup } from '../firebase';
+import { auth, googleProvider, signInWithPopup, GoogleAuthProvider } from '../firebase';
 
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+const API_BASE = ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '' && !window.Capacitor)
   ? `http://${window.location.hostname}:5000`
   : 'https://tailoros-production.up.railway.app';
 
@@ -40,23 +40,12 @@ export default function AuthPage({ onLogin, initialPlan, onBackToLanding }) {
     setError(null);
     setIsLoading(true);
     try {
-      let idToken;
-      // Check if Firebase config is using a placeholder key
-      const isMockFirebase = !auth.config?.apiKey || auth.config.apiKey.includes('mock-api-key-placeholder');
-      
-      if (isMockFirebase) {
-        console.log('Firebase config uses placeholder API key. Performing mock Google sign-in.');
-        idToken = 'mock_google_id_token_' + Math.random().toString(36).substring(2);
-      } else {
-        try {
-          const result = await signInWithPopup(auth, googleProvider);
-          idToken = await result.user.getIdToken();
-        } catch (fbErr) {
-          console.warn('Firebase signInWithPopup failed, falling back to mock Google sign-in:', fbErr);
-          idToken = 'mock_google_id_token_' + Math.random().toString(36).substring(2);
-        }
+      const result = await signInWithPopup(auth, googleProvider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (!credential || !credential.idToken) {
+        throw new Error('Google credential or ID Token not found. Please try again.');
       }
-      
+      const idToken = credential.idToken;
       setGoogleIdToken(idToken);
  
        const res = await fetch(`${API_BASE}/api/auth/google-login`, {
