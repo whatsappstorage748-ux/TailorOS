@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Dashboard from './components/Dashboard';
 import OrderForm from './components/OrderForm';
 import CustomerHistory from './components/CustomerHistory';
 import Analytics from './components/Analytics';
-import { Scissors, LayoutDashboard, UserSearch, ClipboardList, BarChart2, ChevronRight } from 'lucide-react';
+import AuthPage from './components/AuthPage';
+import LandingPage from './components/LandingPage';
+import AdminPanel from './components/AdminPanel';
+import Profile from './components/Profile';
+import { Scissors, LayoutDashboard, UserSearch, ClipboardList, BarChart2, LogOut, Menu, User, Shield, CreditCard } from 'lucide-react';
 
 const NAV_ITEMS = [
   { id: 'create',    label: 'New Order',       icon: ClipboardList },
@@ -12,37 +16,154 @@ const NAV_ITEMS = [
   { id: 'analytics', label: 'Sales & Expenses', icon: BarChart2 },
 ];
 
+// Helper to wrap fetch and automatically add Authorization header
+export const fetchWithAuth = async (url, options = {}) => {
+  const token = localStorage.getItem('tailor_token');
+  const headers = {
+    ...options.headers,
+    'Authorization': `Bearer ${token}`
+  };
+  const response = await fetch(url, { ...options, headers });
+  if (response.status === 401) {
+    localStorage.removeItem('tailor_token');
+    localStorage.removeItem('tailor_user');
+    window.location.href = '/';
+  }
+  return response;
+};
+
+
 export default function App() {
+  const [token, setToken] = useState(localStorage.getItem('tailor_token'));
   const [activeTab, setActiveTab] = useState('create');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [user, setUser] = useState(null);
+  
+  // Landing Page view state
+  const [view, setView] = useState('landing'); 
+  const [selectedPlanIntent, setSelectedPlanIntent] = useState(null);
+  
+  // Hamburger Dropdown toggle
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  const isAdminRoute = window.location.pathname === '/admin';
+
+  useEffect(() => {
+    if (token) {
+      loadUserProfile();
+    }
+  }, [token]);
+
+  const loadUserProfile = async () => {
+    try {
+      const res = await fetchWithAuth('http://localhost:5000/api/auth/profile');
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data.owner);
+        localStorage.setItem('tailor_user', JSON.stringify(data.owner));
+      }
+    } catch (e) {
+      // Fallback to local storage if API fails
+      try {
+        const userData = JSON.parse(localStorage.getItem('tailor_user'));
+        setUser(userData);
+      } catch (err) {}
+    }
+  };
+
+  const handleLogin = (newToken) => {
+    setToken(newToken);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('tailor_token');
+    localStorage.removeItem('tailor_user');
+    setToken(null);
+    setUser(null);
+    setView('landing');
+  };
 
   const handleOrderCreated = () => {
     setRefreshTrigger(prev => prev + 1);
     setTimeout(() => setActiveTab('dashboard'), 1200);
   };
 
-  const activeItem = NAV_ITEMS.find(n => n.id === activeTab);
+  // If path is /admin, render Admin Panel directly
+  if (isAdminRoute) {
+    return <AdminPanel />;
+  }
+
+  // Unauthenticated Flow
+  if (!token) {
+    if (view === 'auth') {
+      return (
+        <AuthPage 
+          onLogin={handleLogin} 
+          initialPlan={selectedPlanIntent} 
+          onBackToLanding={() => setView('landing')}
+        />
+      );
+    }
+    return (
+      <LandingPage 
+        onSelectPlan={(plan) => {
+          setSelectedPlanIntent(plan);
+          setView('auth');
+        }}
+        onSignIn={() => {
+          setSelectedPlanIntent(null);
+          setView('auth');
+        }}
+      />
+    );
+  }
+
+  // Calculate Trial Expiry Days Remaining
+  const getTrialDaysRemaining = () => {
+    if (!user || user.subscription_status !== 'TRIAL') return null;
+    if (!user.subscription_expiry) return 0;
+    const expiry = new Date(user.subscription_expiry);
+    const diffTime = expiry - new Date();
+    return Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+  };
+
+  const trialDays = getTrialDaysRemaining();
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 font-sans overflow-hidden">
+      
+      {/* Sticky Trial Banner */}
+      {user && user.subscription_status === 'TRIAL' && (
+        <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-semibold py-2.5 px-4 text-center flex items-center justify-center gap-2 z-50 shadow-md">
+          <span>⚠️ Your shop is on a 14-Day Free Trial. {trialDays} {trialDays === 1 ? 'day' : 'days'} remaining.</span>
+          <button 
+            onClick={() => setActiveTab('profile')} 
+            className="ml-3 bg-white text-orange-700 px-3 py-1 rounded-md hover:bg-orange-50 font-bold active:scale-95 transition-all text-[11px]"
+          >
+            Upgrade Plan
+          </button>
+        </div>
+      )}
 
-      {/* ── TOP NAVIGATION BAR ──────────────────────────────────── */}
-      <header className="h-14 bg-white border-b border-gray-200 flex items-center px-5 gap-6 z-30 flex-shrink-0 shadow-sm">
-
+      {/* ── TOP HEADER (Brand & Breadcrumb) ───────────────────── */}
+      <header className="h-14 bg-white border-b border-gray-200 flex items-center px-4 sm:px-5 gap-4 sm:gap-6 z-30 flex-shrink-0 shadow-sm relative">
         {/* Brand */}
-        <div className="flex items-center gap-2.5 mr-4">
+        <div className="flex items-center gap-2.5 mr-auto sm:mr-4">
           <div className="p-1.5 bg-brand-600 rounded-md text-white">
             <Scissors className="w-4 h-4 rotate-90" />
           </div>
-          <span className="text-sm font-bold text-gray-900 tracking-tight">Captain Tailors</span>
+          <span className="text-sm font-bold text-gray-900 tracking-tight">TailorOS</span>
         </div>
 
-        {/* Navigation links — horizontal, inline, like Shopify Admin */}
-        <nav className="flex items-center gap-1">
+        {/* Desktop Navigation links — hidden on mobile */}
+        <nav className="hidden sm:flex items-center gap-1">
           {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
-              onClick={() => setActiveTab(id)}
+              onClick={() => {
+                setActiveTab(id);
+                setShowDropdown(false);
+              }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-150 ${
                 activeTab === id
                   ? 'bg-brand-50 text-brand-700'
@@ -55,23 +176,84 @@ export default function App() {
           ))}
         </nav>
 
-        {/* Breadcrumb right — functional label */}
-        <div className="ml-auto flex items-center gap-1.5 text-xs text-gray-400">
-          <span className="font-medium text-gray-700">Captain Tailors</span>
-          <ChevronRight className="w-3 h-3" />
-          <span>{activeItem?.label}</span>
+        {/* Hamburger / Menu Dropdown Trigger */}
+        <div className="ml-auto flex items-center gap-3 relative">
+          {user && <span className="text-xs text-gray-500 hidden sm:block">{user.shop_name}</span>}
+          
+          <button
+            onClick={() => setShowDropdown(!showDropdown)}
+            className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-600 focus:outline-none transition-colors border border-gray-200"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+
+          {/* Three Lines Dropdown Menu */}
+          {showDropdown && (
+            <div className="absolute right-0 top-10 w-48 bg-white border border-gray-200 rounded-xl shadow-xl z-50 py-1.5 animate-fadeIn">
+              <div className="px-4 py-2 border-b border-gray-100 text-left">
+                <span className="font-bold text-xs text-gray-900 block truncate">{user?.shop_name}</span>
+                <span className="text-[10px] text-gray-500 block truncate">{user?.email}</span>
+              </div>
+              
+              <button
+                onClick={() => {
+                  setActiveTab('profile');
+                  setShowDropdown(false);
+                }}
+                className={`w-full flex items-center gap-2 px-4 py-2 text-xs text-left text-gray-700 hover:bg-gray-50 transition-colors ${
+                  activeTab === 'profile' ? 'font-bold text-brand-700 bg-brand-50/40' : ''
+                }`}
+              >
+                <User className="w-4 h-4 text-gray-400" />
+                Shop Profile Settings
+              </button>
+
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-2 px-4 py-2 text-xs text-left text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <LogOut className="w-4 h-4 text-red-400" />
+                Logout Shop
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
       {/* ── MAIN CONTENT ────────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-7xl mx-auto px-5 py-6">
+      <main className="flex-1 overflow-y-auto pb-16 sm:pb-0">
+        <div className="max-w-7xl mx-auto px-3 py-4 sm:px-5 sm:py-6">
           {activeTab === 'create'    && <OrderForm    onOrderCreated={handleOrderCreated} />}
           {activeTab === 'dashboard' && <Dashboard    refreshTrigger={refreshTrigger} />}
           {activeTab === 'history'   && <CustomerHistory />}
           {activeTab === 'analytics' && <Analytics />}
+          {activeTab === 'profile'   && <Profile />}
         </div>
       </main>
+
+      {/* ── MOBILE BOTTOM NAVIGATION BAR ───────────────────────── */}
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 flex justify-around items-center h-16 pb-safe shadow-[0_-1px_3px_rgba(0,0,0,0.05)]">
+        {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
+          const isActive = activeTab === id;
+          return (
+            <button
+              key={id}
+              onClick={() => {
+                setActiveTab(id);
+                setShowDropdown(false);
+              }}
+              className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors ${
+                isActive ? 'text-brand-600' : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+              <span className={`text-[10px] font-medium tracking-wide ${isActive ? 'font-semibold' : ''}`}>
+                {label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
 
     </div>
   );

@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Undo, Redo, Trash2, Grid, Edit3, Eraser } from 'lucide-react';
 
-export default function Canvas({ onChange, initialImage }) {
+export default function Canvas({ onChange, initialImage, readOnly = false }) {
   const canvasRef = useRef(null);
   const contextRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -123,6 +123,7 @@ export default function Canvas({ onChange, initialImage }) {
 
   // Canvas operations
   const startDrawing = ({ nativeEvent }) => {
+    if (readOnly) return;
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     
@@ -145,7 +146,7 @@ export default function Canvas({ onChange, initialImage }) {
   };
 
   const draw = ({ nativeEvent }) => {
-    if (!isDrawing) return;
+    if (readOnly || !isDrawing) return;
     
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
@@ -185,6 +186,7 @@ export default function Canvas({ onChange, initialImage }) {
   };
 
   const clearCanvas = (resetHistory = true) => {
+    if (readOnly) return;
     const canvas = canvasRef.current;
     const context = contextRef.current;
     if (!canvas || !context) return;
@@ -256,20 +258,26 @@ export default function Canvas({ onChange, initialImage }) {
   } : {};
 
   return (
-    <div className="flex flex-col h-full bg-white border border-gray-200 rounded-lg overflow-hidden">
+    <div className={`flex flex-col h-full bg-white border border-gray-200 rounded-lg overflow-hidden ${readOnly ? 'select-none pointer-events-none' : ''}`}>
       {/* Canvas Toolbar — flat, minimal, professional */}
       <div className="flex flex-wrap items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200 gap-2">
         <div className="flex items-center gap-2 text-gray-600">
           <Edit3 className="w-4 h-4 text-gray-400" />
           <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Measurement Sheet</span>
+          {readOnly && (
+            <span className="ml-2 text-2xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 uppercase tracking-wider">
+              Read-Only
+            </span>
+          )}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className={`flex items-center gap-3 ${readOnly ? 'opacity-30 pointer-events-none' : ''}`}>
           {/* Color swatches */}
           <div className="flex items-center gap-1.5 px-2 py-1 bg-white border border-gray-200 rounded-md">
             {[['#002FA7','Blue'],['#111827','Black'],['#dc2626','Red']].map(([color, label]) => (
               <button
                 key={color} type="button" title={label}
+                disabled={readOnly}
                 onClick={() => selectColor(color)}
                 className={`w-5 h-5 rounded-full border-2 transition-transform ${
                   !isEraser && brushColor === color ? 'border-gray-600 scale-125' : 'border-gray-200 hover:scale-110'
@@ -280,6 +288,7 @@ export default function Canvas({ onChange, initialImage }) {
             <div className="w-px h-4 bg-gray-200 mx-0.5" />
             <button
               type="button" title="Eraser"
+              disabled={readOnly}
               onClick={() => setIsEraser(true)}
               className={`p-1 rounded transition ${
                 isEraser ? 'bg-gray-200 text-gray-700' : 'text-gray-400 hover:bg-gray-100'
@@ -295,6 +304,7 @@ export default function Canvas({ onChange, initialImage }) {
             {[2, 3, 5, 8].map((size) => (
               <button
                 key={size} type="button"
+                disabled={readOnly}
                 onClick={() => setBrushSize(size)}
                 className={`w-5 h-5 rounded text-xs font-bold transition ${
                   brushSize === size ? 'bg-brand-600 text-white' : 'text-gray-400 hover:bg-gray-100'
@@ -305,21 +315,21 @@ export default function Canvas({ onChange, initialImage }) {
 
           {/* Actions */}
           <div className="flex items-center gap-1 px-1 py-1 bg-white border border-gray-200 rounded-md">
-            <button type="button" title="Toggle grid" onClick={() => setShowGrid(!showGrid)}
+            <button type="button" title="Toggle grid" onClick={() => setShowGrid(!showGrid)} disabled={readOnly}
               className={`p-1 rounded transition ${showGrid ? 'bg-gray-200 text-gray-700' : 'text-gray-400 hover:bg-gray-100'}`}>
               <Grid className="w-3.5 h-3.5" />
             </button>
             <div className="w-px h-4 bg-gray-200" />
-            <button type="button" title="Undo" onClick={handleUndo} disabled={historyIndex <= 0}
+            <button type="button" title="Undo" onClick={handleUndo} disabled={readOnly || historyIndex <= 0}
               className={`p-1 rounded transition ${historyIndex <= 0 ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:bg-gray-100'}`}>
               <Undo className="w-3.5 h-3.5" />
             </button>
-            <button type="button" title="Redo" onClick={handleRedo} disabled={historyIndex >= history.length - 1}
+            <button type="button" title="Redo" onClick={handleRedo} disabled={readOnly || historyIndex >= history.length - 1}
               className={`p-1 rounded transition ${historyIndex >= history.length - 1 ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:bg-gray-100'}`}>
               <Redo className="w-3.5 h-3.5" />
             </button>
             <div className="w-px h-4 bg-gray-200" />
-            <button type="button" title="Clear" onClick={() => clearCanvas(true)}
+            <button type="button" title="Clear" onClick={() => clearCanvas(true)} disabled={readOnly}
               className="p-1 rounded text-red-400 hover:bg-red-50 transition">
               <Trash2 className="w-3.5 h-3.5" />
             </button>

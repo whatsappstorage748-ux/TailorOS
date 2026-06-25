@@ -7,6 +7,7 @@ import {
 import {
   createOrder,
   completeOrder,
+  readyOrder,
   searchOrders,
   getOrderDetails
 } from '../controllers/orderController.js';
@@ -19,6 +20,7 @@ import {
   getEmployeeSalaries,
   toggleEmployeeSalary,
   getDailyBreakdown,
+  getYearlyBreakdown,
   getCustomExpenses,
   createCustomExpense,
   deleteCustomExpense,
@@ -27,6 +29,7 @@ import {
   getClothConfigs,
   saveClothConfig
 } from '../controllers/analyticsController.js';
+import { getWhatsAppStatus, logoutWhatsAppDevice } from '../controllers/whatsappController.js';
 
 const router = express.Router();
 
@@ -39,6 +42,7 @@ router.get('/customers/:mobile/history', getCustomerHistory);
 router.post('/orders', createOrder);
 router.get('/orders/search', searchOrders);
 router.get('/orders/:bill_number', getOrderDetails);
+router.put('/orders/:bill_number/ready', readyOrder);
 router.put('/orders/:bill_number/complete', completeOrder);
 
 // Dashboard routes
@@ -47,6 +51,7 @@ router.get('/dashboard/stats', getDashboardStats);
 // Analytics & Expenses routes
 router.get('/analytics/summary', getAnalyticsSummary);
 router.get('/analytics/daily', getDailyBreakdown);
+router.get('/analytics/yearly', getYearlyBreakdown);
 router.post('/analytics/expenses', saveExpenses);
 router.get('/analytics/salaries', getEmployeeSalaries);
 router.post('/analytics/salaries/toggle', toggleEmployeeSalary);
@@ -63,5 +68,9 @@ router.put('/employees/:id', updateEmployee);
 // Cloth pricing configurations routes
 router.get('/cloth-configs', getClothConfigs);
 router.post('/cloth-configs', saveClothConfig);
+
+// WhatsApp Web Integration routes
+router.get('/whatsapp/status', getWhatsAppStatus);
+router.post('/whatsapp/logout', logoutWhatsAppDevice);
 
 export default router;

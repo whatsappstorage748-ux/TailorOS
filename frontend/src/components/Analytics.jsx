@@ -1,3 +1,4 @@
+import { fetchWithAuth } from '../App';
 import React, { useState, useEffect } from 'react';
 import { 
   BarChart, TrendingUp, TrendingDown, Users, DollarSign, Calendar, 
@@ -11,8 +12,12 @@ export default function Analytics() {
     : 'https://captain-tailors.loca.lt';
 
   // Month tracking (generate the last 12 months)
+  const [viewMode, setViewMode] = useState('monthly');
   const [selectedMonth, setSelectedMonth] = useState('');
   const [monthsList, setMonthsList] = useState([]);
+  const [selectedYear, setSelectedYear] = useState('');
+  const [yearsList, setYearsList] = useState([]);
+  const [yearlyStats, setYearlyStats] = useState([]);
 
   // Monthly summary stats
   const [summary, setSummary] = useState({
@@ -81,13 +86,20 @@ export default function Analytics() {
     }
     setMonthsList(months);
     setSelectedMonth(months[0].val); // Default to current month
+
+    const years = [];
+    for (let i = 0; i < 5; i++) {
+      years.push(String(currentDate.getFullYear() - i));
+    }
+    setYearsList(years);
+    setSelectedYear(years[0]);
   }, []);
 
   // Fetch summary when month changes
   const fetchSummary = async () => {
     if (!selectedMonth) return;
     try {
-      const res = await fetch(`${API_BASE}/api/analytics/summary?month=${selectedMonth}`);
+      const res = await fetchWithAuth(`${API_BASE}/api/analytics/summary?month=${selectedMonth}`);
       if (res.ok) {
         const data = await res.json();
         setSummary(data);
@@ -104,7 +116,7 @@ export default function Analytics() {
     if (!selectedMonth) return;
     setIsLoadingCustom(true);
     try {
-      const res = await fetch(`${API_BASE}/api/expenses/custom?month=${selectedMonth}`);
+      const res = await fetchWithAuth(`${API_BASE}/api/expenses/custom?month=${selectedMonth}`);
       if (res.ok) {
         const data = await res.json();
         setCustomExpenses(data.expenses || []);
@@ -121,7 +133,7 @@ export default function Analytics() {
     if (!selectedMonth) return;
     setIsLoadingDaily(true);
     try {
-      const res = await fetch(`${API_BASE}/api/analytics/daily?month=${selectedMonth}`);
+      const res = await fetchWithAuth(`${API_BASE}/api/analytics/daily?month=${selectedMonth}`);
       if (res.ok) {
         const data = await res.json();
         setDailyStats(data.dailyStats || []);
@@ -137,7 +149,7 @@ export default function Analytics() {
   const fetchClothConfigs = async () => {
     setIsLoadingClothConfigs(true);
     try {
-      const res = await fetch(`${API_BASE}/api/cloth-configs`);
+      const res = await fetchWithAuth(`${API_BASE}/api/cloth-configs`);
       if (res.ok) {
         const data = await res.json();
         setClothConfigs(data.configs || []);
@@ -149,13 +161,47 @@ export default function Analytics() {
     }
   };
 
-  useEffect(() => {
-    if (selectedMonth) {
-      fetchSummary();
-      fetchCustomExpenses();
-      fetchDailyBreakdown();
+  // Fetch yearly break-down
+  const fetchYearlyBreakdown = async () => {
+    if (!selectedYear) return;
+    setIsLoadingDaily(true);
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/api/analytics/yearly?year=${selectedYear}`);
+      if (res.ok) {
+        const data = await res.json();
+        setYearlyStats(data.yearlyStats || []);
+        
+        const totalRev = (data.yearlyStats || []).reduce((s, d) => s + d.revenue, 0);
+        const totalExp = (data.yearlyStats || []).reduce((s, d) => s + d.expense, 0);
+        setSummary({
+          revenue: totalRev,
+          rent: 0,
+          electricity: 0,
+          salariesPaid: totalExp, // mapped strictly for summary visual
+          customExpensesPaid: 0,
+          profit: totalRev - totalExp
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching yearly breakdown:', error);
+    } finally {
+      setIsLoadingDaily(false);
     }
-  }, [selectedMonth]);
+  };
+
+  useEffect(() => {
+    if (viewMode === 'monthly') {
+      if (selectedMonth) {
+        fetchSummary();
+        fetchCustomExpenses();
+        fetchDailyBreakdown();
+      }
+    } else {
+      if (selectedYear) {
+        fetchYearlyBreakdown();
+      }
+    }
+  }, [selectedMonth, selectedYear, viewMode]);
 
   useEffect(() => {
     fetchClothConfigs();
@@ -166,7 +212,7 @@ export default function Analytics() {
     if (!selectedMonth) return;
     setIsLoadingSalaries(true);
     try {
-      const res = await fetch(`${API_BASE}/api/analytics/salaries?month=${selectedMonth}`);
+      const res = await fetchWithAuth(`${API_BASE}/api/analytics/salaries?month=${selectedMonth}`);
       if (res.ok) {
         const data = await res.json();
         setEmployees(data.employees || []);
@@ -189,7 +235,7 @@ export default function Analytics() {
     e.preventDefault();
     setIsSavingExpenses(true);
     try {
-      const res = await fetch(`${API_BASE}/api/analytics/expenses`, {
+      const res = await fetchWithAuth(`${API_BASE}/api/analytics/expenses`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -216,7 +262,7 @@ export default function Analytics() {
     if (!newExpenseName || !newExpenseAmount) return;
     setIsAddingExpense(true);
     try {
-      const res = await fetch(`${API_BASE}/api/expenses/custom`, {
+      const res = await fetchWithAuth(`${API_BASE}/api/expenses/custom`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -242,7 +288,7 @@ export default function Analytics() {
   // Delete Custom Expense
   const handleDeleteCustomExpense = async (id) => {
     try {
-      const res = await fetch(`${API_BASE}/api/expenses/custom/${id}`, {
+      const res = await fetchWithAuth(`${API_BASE}/api/expenses/custom/${id}`, {
         method: 'DELETE'
       });
       if (res.ok) {
@@ -261,7 +307,7 @@ export default function Analytics() {
     if (!newEmployeeName || !newEmployeeSalary) return;
     setIsAddingEmployee(true);
     try {
-      const res = await fetch(`${API_BASE}/api/employees`, {
+      const res = await fetchWithAuth(`${API_BASE}/api/employees`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -287,7 +333,7 @@ export default function Analytics() {
   const handleUpdateEmployeeSalary = async (employeeId) => {
     if (!editingEmployeeSalary) return;
     try {
-      const res = await fetch(`${API_BASE}/api/employees/${employeeId}`, {
+      const res = await fetchWithAuth(`${API_BASE}/api/employees/${employeeId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -312,7 +358,7 @@ export default function Analytics() {
     if (!newClothType || !newClothPrice) return;
     setIsSavingClothConfig(true);
     try {
-      const res = await fetch(`${API_BASE}/api/cloth-configs`, {
+      const res = await fetchWithAuth(`${API_BASE}/api/cloth-configs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -335,7 +381,7 @@ export default function Analytics() {
   // Toggle paid status for employee salary
   const handleToggleSalary = async (employeeId) => {
     try {
-      const res = await fetch(`${API_BASE}/api/analytics/salaries/toggle`, {
+      const res = await fetchWithAuth(`${API_BASE}/api/analytics/salaries/toggle`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -372,7 +418,8 @@ export default function Analytics() {
 
   // Helper to draw SVG line chart for daily revenue
   const renderRevenueChart = () => {
-    if (dailyStats.length === 0) return <div className="py-12 text-center text-gray-400 text-xs">No transactions recorded this month.</div>;
+    const activeStats = viewMode === 'monthly' ? dailyStats : yearlyStats;
+    if (activeStats.length === 0) return <div className="py-12 text-center text-gray-400 text-xs">No transactions recorded this month.</div>;
 
     const width = 600;
     const height = 240;
@@ -381,10 +428,10 @@ export default function Analytics() {
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
 
-    const xMax = dailyStats.length - 1;
-    const yMax = Math.max(...dailyStats.map(s => s.revenue), 1000); // minimum scale peak
+    const xMax = activeStats.length === 1 ? 1 : activeStats.length - 1;
+    const yMax = Math.max(...activeStats.map(s => s.revenue), 1000); // minimum scale peak
 
-    const points = dailyStats.map((d, i) => {
+    const points = activeStats.map((d, i) => {
       const x = padding.left + (i * chartWidth) / xMax;
       const y = padding.top + chartHeight - (d.revenue * chartHeight) / yMax;
       return { x, y, ...d };
@@ -407,10 +454,10 @@ export default function Analytics() {
           );
         })}
         {/* X axis ticks */}
-        {points.filter((_, i) => i % 5 === 0 || i === points.length - 1).map((p, index) => (
+        {points.filter((_, i) => i % 5 === 0 || i === points.length - 1 || viewMode === 'yearly').map((p, index) => (
           <g key={index}>
             <line x1={p.x} y1={padding.top + chartHeight} x2={p.x} y2={padding.top + chartHeight + 4} stroke="#d1d5db" />
-            <text x={p.x} y={padding.top + chartHeight + 15} textAnchor="middle" fontSize="8" fill="#9ca3af" fontWeight="600">d{p.day}</text>
+            <text x={p.x} y={padding.top + chartHeight + 15} textAnchor="middle" fontSize="8" fill="#9ca3af" fontWeight="600">{viewMode === 'monthly' ? `d${p.day}` : p.label}</text>
           </g>
         ))}
         {/* Single clean stroke line — no gradient fill */}
@@ -427,7 +474,8 @@ export default function Analytics() {
 
   // Helper to draw SVG line/bar profit chart (centered zero)
   const renderProfitChart = () => {
-    if (dailyStats.length === 0) return <div className="py-12 text-center text-slate-500 text-xs">No data recorded this month.</div>;
+    const activeStats = viewMode === 'monthly' ? dailyStats : yearlyStats;
+    if (activeStats.length === 0) return <div className="py-12 text-center text-slate-500 text-xs">No data recorded this month.</div>;
 
     const width = 600;
     const height = 240;
@@ -436,8 +484,8 @@ export default function Analytics() {
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
 
-    const xMax = dailyStats.length - 1;
-    const profits = dailyStats.map(s => s.profit);
+    const xMax = activeStats.length === 1 ? 1 : activeStats.length - 1;
+    const profits = activeStats.map(s => s.profit);
     const extremeMax = Math.max(...profits.map(Math.abs), 500);
 
     const yRangeMax = extremeMax;
@@ -449,7 +497,7 @@ export default function Analytics() {
       return padding.top + chartHeight - ratio * chartHeight;
     };
 
-    const points = dailyStats.map((d, i) => ({
+    const points = activeStats.map((d, i) => ({
       x: getX(i),
       y: getY(d.profit),
       ...d
@@ -474,10 +522,10 @@ export default function Analytics() {
             </g>
           );
         })}
-        {points.filter((_, i) => i % 5 === 0 || i === points.length - 1).map((p, index) => (
+        {points.filter((_, i) => i % 5 === 0 || i === points.length - 1 || viewMode === 'yearly').map((p, index) => (
           <g key={index}>
             <line x1={p.x} y1={padding.top + chartHeight} x2={p.x} y2={padding.top + chartHeight + 4} stroke="#d1d5db" />
-            <text x={p.x} y={padding.top + chartHeight + 15} textAnchor="middle" fontSize="8" fill="#9ca3af" fontWeight="600">d{p.day}</text>
+            <text x={p.x} y={padding.top + chartHeight + 15} textAnchor="middle" fontSize="8" fill="#9ca3af" fontWeight="600">{viewMode === 'monthly' ? `d${p.day}` : p.label}</text>
           </g>
         ))}
         <path d={pathD} fill="none" stroke={summary.profit >= 0 ? '#10b981' : '#ef4444'} strokeWidth="2" strokeLinejoin="round" />
@@ -497,17 +545,35 @@ export default function Analytics() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-sm font-semibold text-gray-900">Sales &amp; Expenses</h1>
-          <p className="text-xs text-gray-400 mt-0.5">{getMonthLabel()}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{viewMode === 'monthly' ? getActiveMonthLabel() : `Year ${selectedYear}`}</p>
         </div>
-        <div className="relative w-52">
-          <Calendar className="absolute left-3 top-2.5 w-3.5 h-3.5 text-gray-400" />
-          <select
-            value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}
-            className="field-input pl-9 appearance-none cursor-pointer text-sm"
-          >
-            {monthsList.map((m) => <option key={m.val} value={m.val}>{m.label}</option>)}
-          </select>
-          <ChevronDown className="absolute right-3 top-2.5 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+        
+        <div className="flex items-center gap-3">
+          {/* View Mode Toggle */}
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button onClick={() => setViewMode('monthly')} className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${viewMode === 'monthly' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Monthly</button>
+            <button onClick={() => setViewMode('yearly')} className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${viewMode === 'yearly' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Yearly</button>
+          </div>
+
+          <div className="relative w-40">
+            <Calendar className="absolute left-3 top-2.5 w-3.5 h-3.5 text-gray-400" />
+            {viewMode === 'monthly' ? (
+              <select
+                value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}
+                className="field-input pl-9 appearance-none cursor-pointer text-sm"
+              >
+                {monthsList.map((m) => <option key={m.val} value={m.val}>{m.label}</option>)}
+              </select>
+            ) : (
+              <select
+                value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}
+                className="field-input pl-9 appearance-none cursor-pointer text-sm"
+              >
+                {yearsList.map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+            )}
+            <ChevronDown className="absolute right-3 top-2.5 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+          </div>
         </div>
       </div>
 
@@ -525,8 +591,8 @@ export default function Analytics() {
           </div>
         </button>
 
-        <div onClick={() => setShowSalariesModal(true)}
-          className="stat-card hover:bg-gray-50 cursor-pointer transition-colors">
+        <div onClick={() => viewMode === 'monthly' && setShowSalariesModal(true)}
+          className={`stat-card transition-colors ${viewMode === 'monthly' ? 'hover:bg-gray-50 cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}>
           <div className="stat-icon bg-brand-50"><Users className="w-4 h-4 text-brand-600" /></div>
           <div>
             <p className="section-label mb-0.5">Salaries</p>
@@ -576,7 +642,7 @@ export default function Analytics() {
                 <h3 className="text-sm font-semibold text-gray-800">Monthly Overhead</h3>
               </div>
               {!isEditingExpenses ? (
-                <button type="button" onClick={() => setIsEditingExpenses(true)} className="btn-ghost text-xs">
+                <button type="button" onClick={() => viewMode === 'monthly' && setIsEditingExpenses(true)} disabled={viewMode === 'yearly'} className="btn-ghost text-xs disabled:opacity-50">
                   <Edit2 className="w-3.5 h-3.5" /> Edit
                 </button>
               ) : (
@@ -646,7 +712,8 @@ export default function Analytics() {
             ) : customExpenses.length === 0 ? (
               <div className="py-12 text-center text-gray-400 text-xs">No expenses recorded for {getActiveMonthLabel()}.</div>
             ) : (
-              <table className="data-table text-xs">
+              <div className="overflow-x-auto">
+                <table className="data-table text-xs">
                 <thead><tr><th>Item</th><th>Date</th><th className="text-right">Amount</th><th className="text-center">Remove</th></tr></thead>
                 <tbody>
                   {customExpenses.map((exp) => (
@@ -664,6 +731,7 @@ export default function Analytics() {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </div>
         </div>
@@ -702,7 +770,8 @@ export default function Analytics() {
             ) : clothConfigs.length === 0 ? (
               <div className="py-12 text-center text-gray-400 text-xs">No prices configured yet. Add one on the left.</div>
             ) : (
-              <table className="data-table text-xs">
+              <div className="overflow-x-auto">
+                <table className="data-table text-xs">
                 <thead><tr><th>Cloth Type</th><th className="text-right">Default Price</th><th className="text-center">Action</th></tr></thead>
                 <tbody>
                   {clothConfigs.map((cfg) => (
@@ -718,6 +787,7 @@ export default function Analytics() {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </div>
         </div>
@@ -772,7 +842,8 @@ export default function Analytics() {
                 ) : employees.length === 0 ? (
                   <div className="py-12 text-center text-sm text-gray-400">No employees registered.</div>
                 ) : (
-                  <table className="data-table">
+                  <div className="overflow-x-auto">
+                    <table className="data-table">
                     <thead><tr><th>Employee</th><th className="text-right">Monthly Salary</th><th className="text-center">Status</th></tr></thead>
                     <tbody>
                       {employees.map((emp) => (
@@ -810,6 +881,7 @@ export default function Analytics() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 )}
               </div>
             </div>

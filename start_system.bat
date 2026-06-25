@@ -22,10 +22,7 @@ if not exist "backend\uploads" (
     echo   Created backend\uploads directory
 )
 
-echo [3/4] Starting MongoDB database in the background...
-start "Tailor Shop - MongoDB Database" /min "C:\Program Files\MongoDB\Server\8.2\bin\mongod.exe" --dbpath "%~dp0backend\data"
-
-echo [4/4] Launching Backend Express API, Local Dev Server, and Secure Web Tunnel...
+echo [3/3] Launching Backend Express API, Local Dev Server, and Secure Web Tunnel...
 start "Tailor Shop - Express API (Port 5000)" cmd /k "cd backend && node server.js"
 rem Expose local backend to the internet via localtunnel so the Firebase-hosted app can connect to it from anywhere
 start "Tailor Shop - Secure Web Tunnel (Port 5000)" cmd /k "npx localtunnel --port 5000 --subdomain captain-tailors"

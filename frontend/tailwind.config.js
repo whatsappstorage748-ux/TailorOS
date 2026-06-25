@@ -9,6 +9,7 @@ export default {
       fontFamily: {
         // Inter: the industry standard for data-heavy SaaS tools (used by Linear, Vercel, Stripe)
         sans: ['Inter', 'system-ui', 'sans-serif'],
+        display: ['Montserrat', 'sans-serif'],
       },
       colors: {
         brand: {

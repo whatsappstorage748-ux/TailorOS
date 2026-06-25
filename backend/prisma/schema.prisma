@@ -1,0 +1,213 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model ShopOwner {
+  id                  String    @id @default(uuid())
+  email               String    @unique
+  password_hash       String
+  shop_code           String    @unique
+  shop_name           String
+  contact_number      String
+  shop_logo           String?
+  is_active           Boolean   @default(true)
+  subscription_tier   String    @default("STARTER") // STARTER, GROWTH, SCALE
+  subscription_status String    @default("TRIAL")   // TRIAL, ACTIVE, EXPIRED, CANCELLED
+  subscription_expiry DateTime?
+  last_login_date     DateTime?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+
+  cloth_configs       ClothConfig[]
+  customers           Customer[]
+  employees           Employee[]
+  expenses            Expense[]
+  custom_expenses     CustomExpense[]
+  orders              Order[]
+}
+
+model Admin {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password_hash String
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+}
+
+model AdminAuditLog {
+  id             String   @id @default(uuid())
+  action_type    String   // e.g. SUSPEND_SHOP, EXTEND_TRIAL, CHANGE_PLAN, EDIT_CMS
+  target_shop    String?  // Shop code or shop name affected
+  previous_value String?  // Old state/value description
+  new_value      String?  // New state/value description
+  admin_email    String
+  timestamp      DateTime @default(now())
+}
+
+// Landing Page CMS Models
+model LandingHero {
+  id                   String @id @default("hero")
+  main_heading         String @default("Run Your Tailor Shop Without Paper Records")
+  sub_heading          String @default("Manage measurements, orders, bills, customers, employees, expenses and WhatsApp invoices from one place.")
+  primary_cta_text     String @default("Start 14-Day Free Trial")
+  secondary_cta_text   String @default("Watch Demo")
+  dashboard_preview_url String @default("")
+}
+
+model LandingFeature {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  icon        String   // Name of Lucide icon (e.g. "User", "Scissors")
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+}
+
+model LandingPlan {
+  id            String   @id @default(uuid())
+  name          String   @unique // STARTER, GROWTH, SCALE
+  display_name  String   // Starter, Growth, Scale
+  price         Float
+  description   String
+  features_list String   // JSON-serialized list of features
+  badge_text    String?  // e.g. "Recommended", "Try for 1 rupee"
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+}
+
+model LandingFAQ {
+  id         String   @id @default(uuid())
+  question   String
+  answer     String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
+model LandingBranding {
+  id              String @id @default("branding")
+  logo_url        String @default("")
+  hero_banner_url String @default("")
+  footer_text     String @default("Built for Modern Tailors")
+  support_email   String @default("support@tailoros.com")
+  contact_number  String @default("+91 98765 43210")
+}
+
+model ClothConfig {
+  id            String    @id @default(uuid())
+  cloth_type    String
+  default_price Float
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  owner_id      String
+  owner         ShopOwner @relation(fields: [owner_id], references: [id])
+
+  @@unique([owner_id, cloth_type])
+}
+
+model Customer {
+  id            String    @id @default(uuid())
+  mobile_number String
+  customer_name String
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  owner_id      String
+  owner         ShopOwner @relation(fields: [owner_id], references: [id])
+
+  @@unique([owner_id, mobile_number])
+}
+
+model Employee {
+  id          String    @id @default(uuid())
+  name        String
+  base_salary Float
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  owner_id    String
+  owner       ShopOwner @relation(fields: [owner_id], references: [id])
+
+  salaries    EmployeeSalary[]
+}
+
+model EmployeeSalary {
+  id          String    @id @default(uuid())
+  month       String
+  status      String    @default("Unpaid")
+  amount      Float
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  employee_id String
+  employee    Employee  @relation(fields: [employee_id], references: [id])
+
+  @@unique([employee_id, month])
+}
+
+model Expense {
+  id          String    @id @default(uuid())
+  month       String
+  rent        Float     @default(10000)
+  electricity Float     @default(2000)
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  owner_id    String
+  owner       ShopOwner @relation(fields: [owner_id], references: [id])
+
+  @@unique([owner_id, month])
+}
+
+model CustomExpense {
+  id          String    @id @default(uuid())
+  name        String
+  amount      Float
+  month       String
+  date        DateTime  @default(now())
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  owner_id    String
+  owner       ShopOwner @relation(fields: [owner_id], references: [id])
+}
+
+model Order {
+  id                     BigInt    @id @default(autoincrement())
+  bill_number            String
+  mobile_number          String
+  order_date             DateTime  @default(now())
+  measurement_image_path String
+  total_amount           Float
+  advance_amount         Float     @default(0)
+  balance_amount         Float
+  status                 String    @default("Undelivered")
+  delivery_date          DateTime?
+  created_at             DateTime  @default(now())
+  updated_at             DateTime  @updatedAt
+
+  owner_id               String
+  owner                  ShopOwner @relation(fields: [owner_id], references: [id])
+
+  items                  OrderItem[]
+
+  @@unique([owner_id, bill_number])
+}
+
+model OrderItem {
+  id              String    @id @default(uuid())
+  cloth_type      String
+  quantity        Int
+  price_per_cloth Float
+  total_amount    Float
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  order_id        BigInt
+  order           Order     @relation(fields: [order_id], references: [id], onDelete: Cascade)
+}

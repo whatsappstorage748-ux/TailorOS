@@ -1,33 +1,72 @@
 import assert from 'assert';
-import mongoose from 'mongoose';
-import Expense from './models/Expense.js';
-import EmployeeSalary from './models/EmployeeSalary.js';
-import Employee from './models/Employee.js';
-import CustomExpense from './models/CustomExpense.js';
-import ClothConfig from './models/ClothConfig.js';
+import { PrismaClient } from '@prisma/client';
 
 async function runTests() {
-  const MONGODB_URI = 'mongodb://127.0.0.1:27017/tailor-shop';
-  await mongoose.connect(MONGODB_URI);
-  // Clean up any override records from previous runs to ensure reproducibility
-  await Expense.deleteOne({ month: '2026-06' });
-  await EmployeeSalary.deleteMany({ month: '2026-06' });
-  await CustomExpense.deleteMany({ month: '2026-06' });
-  await ClothConfig.deleteMany(); // Reset default configs
-  // Remove any employee added by tests to maintain consistent state
-  await Employee.deleteMany({ name: 'Test Worker (Stitcher)' });
-  await mongoose.disconnect();
+  const host = 'http://127.0.0.1:5000';
+  const month = "2026-06";
+  const testEmail = 'test_owner@example.com';
+  const testPassword = 'password123';
 
-  const host = 'http://localhost:5000';
+  console.log('Cleaning up database state for test user...');
+  const prisma = new PrismaClient();
+  await prisma.$connect();
+
+  const existingOwner = await prisma.shopOwner.findUnique({
+    where: { email: testEmail }
+  });
+
+  if (existingOwner) {
+    const ownerId = existingOwner.id;
+    await prisma.orderItem.deleteMany({ where: { order: { owner_id: ownerId } } });
+    await prisma.order.deleteMany({ where: { owner_id: ownerId } });
+    await prisma.customExpense.deleteMany({ where: { owner_id: ownerId } });
+    await prisma.expense.deleteMany({ where: { owner_id: ownerId } });
+    await prisma.employeeSalary.deleteMany({ where: { employee: { owner_id: ownerId } } });
+    await prisma.employee.deleteMany({ where: { owner_id: ownerId } });
+    await prisma.clothConfig.deleteMany({ where: { owner_id: ownerId } });
+    await prisma.customer.deleteMany({ where: { owner_id: ownerId } });
+    await prisma.shopOwner.delete({ where: { id: ownerId } });
+  }
+
+  await prisma.$disconnect();
+
   console.log('====================================================');
   console.log('Starting extended backend verification tests...');
   console.log('====================================================');
 
-  const month = "2026-06";
+  // Register the test owner
+  console.log('Registering test shop owner...');
+  const signupRes = await fetch(`${host}/api/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: testEmail,
+      password: testPassword,
+      shop_name: 'Verification Test Shop',
+      contact_number: '9876543210'
+    })
+  });
+  if (!signupRes.ok) {
+    const errText = await signupRes.text();
+    throw new Error(`Failed to sign up test owner: ${errText}`);
+  }
+  const signupData = await signupRes.json();
+  const token = signupData.token;
+  console.log('Successfully registered and logged in test shop owner');
+
+  const headers = {
+    'Authorization': `Bearer ${token}`
+  };
+  const jsonHeaders = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+  };
 
   // 1. Verify Seeding & Listing Employee Salaries
   console.log('1. Checking employee salaries and payroll seeding...');
-  const salariesRes = await fetch(`${host}/api/analytics/salaries?month=${month}`);
+  const salariesRes = await fetch(`${host}/api/analytics/salaries?month=${month}`, {
+    headers
+  });
   if (!salariesRes.ok) throw new Error('Failed to fetch salaries');
   const salariesData = await salariesRes.json();
   
@@ -48,7 +87,7 @@ async function runTests() {
   };
   const addEmpRes = await fetch(`${host}/api/employees`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders,
     body: JSON.stringify(employeePayload)
   });
   if (!addEmpRes.ok) throw new Error('Failed to register employee');
@@ -61,7 +100,7 @@ async function runTests() {
   console.log('   Testing updating employee base salary...');
   const updateEmpRes = await fetch(`${host}/api/employees/${ramesh.employee_id}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders,
     body: JSON.stringify({ base_salary: 16000 })
   });
   if (!updateEmpRes.ok) throw new Error('Failed to update employee salary');
@@ -71,7 +110,9 @@ async function runTests() {
 
   // 3. Verify Analytics Summary (Default State)
   console.log('\n3. Checking monthly analytics summary (Default state)...');
-  const summaryRes = await fetch(`${host}/api/analytics/summary?month=${month}`);
+  const summaryRes = await fetch(`${host}/api/analytics/summary?month=${month}`, {
+    headers
+  });
   if (!summaryRes.ok) throw new Error('Failed to fetch summary');
   const summaryData = await summaryRes.json();
   
@@ -90,7 +131,7 @@ async function runTests() {
   };
   const saveExpenseRes = await fetch(`${host}/api/analytics/expenses`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders,
     body: JSON.stringify(expensePayload)
   });
   if (!saveExpenseRes.ok) throw new Error('Failed to save expenses');
@@ -107,7 +148,7 @@ async function runTests() {
   };
   const toggleRes = await fetch(`${host}/api/analytics/salaries/toggle`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders,
     body: JSON.stringify(togglePayload)
   });
   if (!toggleRes.ok) throw new Error('Failed to toggle salary');
@@ -124,7 +165,7 @@ async function runTests() {
   };
   const addCustomRes = await fetch(`${host}/api/expenses/custom`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders,
     body: JSON.stringify(customExpensePayload)
   });
   if (!addCustomRes.ok) throw new Error('Failed to save custom expense');
@@ -135,7 +176,9 @@ async function runTests() {
 
   // 7. Verify Profit Summary After Updates (Rent: 12000, Elec: 1800, Salaries: 16000 [Ramesh new salary], Custom: 750)
   console.log('\n7. Checking updated monthly profit summary with custom expenses...');
-  const updatedSummaryRes = await fetch(`${host}/api/analytics/summary?month=${month}`);
+  const updatedSummaryRes = await fetch(`${host}/api/analytics/summary?month=${month}`, {
+    headers
+  });
   if (!updatedSummaryRes.ok) throw new Error('Failed to fetch updated summary');
   const updatedSummary = await updatedSummaryRes.json();
   console.log('   Updated Summary:', updatedSummary);
@@ -157,7 +200,7 @@ async function runTests() {
   };
   const saveConfigRes = await fetch(`${host}/api/cloth-configs`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders,
     body: JSON.stringify(clothConfigPayload)
   });
   if (!saveConfigRes.ok) throw new Error('Failed to save cloth config');
@@ -167,7 +210,9 @@ async function runTests() {
   assert.strictEqual(saveConfigData.config.default_price, 2500);
 
   // Fetch configs
-  const getConfigsRes = await fetch(`${host}/api/cloth-configs`);
+  const getConfigsRes = await fetch(`${host}/api/cloth-configs`, {
+    headers
+  });
   if (!getConfigsRes.ok) throw new Error('Failed to fetch cloth configs list');
   const getConfigsData = await getConfigsRes.json();
   console.log(`   Fetched configurations count: ${getConfigsData.configs.length}`);
@@ -176,7 +221,9 @@ async function runTests() {
 
   // 9. Test Daily breakdown stats breakdown API
   console.log('\n9. Testing daily analytics stats breakdown query...');
-  const dailyBreakdownRes = await fetch(`${host}/api/analytics/daily?month=${month}`);
+  const dailyBreakdownRes = await fetch(`${host}/api/analytics/daily?month=${month}`, {
+    headers
+  });
   if (!dailyBreakdownRes.ok) throw new Error('Failed to fetch daily stats');
   const dailyBreakdownData = await dailyBreakdownRes.json();
   console.log(`   Fetched daily breakdown stats count: ${dailyBreakdownData.dailyStats.length} days`);

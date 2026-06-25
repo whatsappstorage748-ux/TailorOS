@@ -2,6 +2,8 @@ node_modules/
 backend/data/
 backend/uploads/*
 !backend/uploads/.gitkeep
+backend/.wwebjs_auth/
+backend/.wwebjs_cache/
 frontend/dist/
 .env
 .env.local
