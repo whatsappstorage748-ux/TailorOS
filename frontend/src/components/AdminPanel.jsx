@@ -82,7 +82,7 @@ export default function AdminPanel() {
 
   const checkSetupStatus = async () => {
     try {
-      const res = await fetch('${API_BASE}/api/admin/setup-check');
+      const res = await fetch(`${API_BASE}/api/admin/setup-check`);
       const data = await res.json();
       setNeedsSetup(data.needsSetup);
     } catch (err) {
@@ -138,19 +138,19 @@ export default function AdminPanel() {
   const loadDashboardData = async () => {
     try {
       if (activeTab === 'overview') {
-        const res = await adminFetch('${API_BASE}/api/admin/stats');
+        const res = await adminFetch(`${API_BASE}/api/admin/stats`);
         const data = await res.json();
         setStats(data);
       } else if (activeTab === 'users') {
-        const res = await adminFetch('${API_BASE}/api/admin/users');
+        const res = await adminFetch(`${API_BASE}/api/admin/users`);
         const data = await res.json();
         setShops(data.users || []);
       } else if (activeTab === 'audit') {
-        const res = await adminFetch('${API_BASE}/api/admin/audit-logs');
+        const res = await adminFetch(`${API_BASE}/api/admin/audit-logs`);
         const data = await res.json();
         setAuditLogs(data.logs || []);
       } else if (activeTab === 'cms') {
-        const res = await fetch('${API_BASE}/api/admin/cms');
+        const res = await fetch(`${API_BASE}/api/admin/cms`);
         const data = await res.json();
         setCms(data);
         setHeroHeading(data.hero.main_heading);
@@ -243,7 +243,7 @@ export default function AdminPanel() {
   const handleSaveHero = async (e) => {
     e.preventDefault();
     try {
-      const res = await adminFetch('${API_BASE}/api/admin/cms/hero', {
+      const res = await adminFetch(`${API_BASE}/api/admin/cms/hero`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -265,7 +265,7 @@ export default function AdminPanel() {
   const handleSaveBranding = async (e) => {
     e.preventDefault();
     try {
-      const res = await adminFetch('${API_BASE}/api/admin/cms/branding', {
+      const res = await adminFetch(`${API_BASE}/api/admin/cms/branding`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -286,7 +286,7 @@ export default function AdminPanel() {
   const handleAddFeature = async (e) => {
     e.preventDefault();
     try {
-      const res = await adminFetch('${API_BASE}/api/admin/cms/features', {
+      const res = await adminFetch(`${API_BASE}/api/admin/cms/features`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -319,7 +319,7 @@ export default function AdminPanel() {
   const handleAddFAQ = async (e) => {
     e.preventDefault();
     try {
-      const res = await adminFetch('${API_BASE}/api/admin/cms/faqs', {
+      const res = await adminFetch(`${API_BASE}/api/admin/cms/faqs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -358,7 +358,7 @@ export default function AdminPanel() {
   const handleSavePlan = async (e) => {
     e.preventDefault();
     try {
-      const res = await adminFetch('${API_BASE}/api/admin/cms/plans', {
+      const res = await adminFetch(`${API_BASE}/api/admin/cms/plans`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

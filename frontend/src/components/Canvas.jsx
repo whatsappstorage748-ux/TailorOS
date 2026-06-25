@@ -15,32 +15,88 @@ export default function Canvas({ onChange, initialImage, readOnly = false }) {
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
 
-  // Initialize canvas
+  // Keep refs of drawing settings to prevent stale closures in ResizeObserver
+  const brushColorRef = useRef(brushColor);
+  const brushSizeRef = useRef(brushSize);
+  const isEraserRef = useRef(isEraser);
+
+  useEffect(() => {
+    brushColorRef.current = brushColor;
+    brushSizeRef.current = brushSize;
+    isEraserRef.current = isEraser;
+  }, [brushColor, brushSize, isEraser]);
+
+  // Initialize and handle dynamic resizing using ResizeObserver
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const parent = canvas.parentElement;
+    if (!parent) return;
 
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * 2;
-    canvas.height = rect.height * 2;
-    canvas.style.width = '100%';
-    canvas.style.height = '100%';
+    const resizeObserver = new ResizeObserver((entries) => {
+      const rect = parent.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
 
-    const context = canvas.getContext('2d');
-    context.scale(2, 2);
-    context.lineCap = 'round';
-    context.lineJoin = 'round';
-    context.strokeStyle = brushColor;
-    context.lineWidth = brushSize;
-    contextRef.current = context;
+      const targetWidth = Math.round(rect.width * 2);
+      const targetHeight = Math.round(rect.height * 2);
 
-    clearCanvas(false);
-    
-    const initialState = canvas.toDataURL('image/webp', 0.85);
-    setHistory([initialState]);
-    setHistoryIndex(0);
-    setIsInitialized(true);
-  }, []);
+      // Skip resizing if already correctly sized to prevent infinite loops
+      if (canvas.width === targetWidth && canvas.height === targetHeight) {
+        return;
+      }
+
+      const isFirstTime = !isInitialized;
+
+      if (isFirstTime) {
+        // Initialize synchronously on first size detection
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+
+        const context = canvas.getContext('2d');
+        context.scale(2, 2);
+        context.lineCap = 'round';
+        context.lineJoin = 'round';
+        context.strokeStyle = brushColorRef.current;
+        context.lineWidth = brushSizeRef.current;
+        contextRef.current = context;
+
+        // Start with a clean white canvas
+        context.fillStyle = '#FFFFFF';
+        context.fillRect(0, 0, rect.width, rect.height);
+
+        const initialState = canvas.toDataURL('image/webp', 0.85);
+        setHistory([initialState]);
+        setHistoryIndex(0);
+        setIsInitialized(true);
+      } else {
+        // Asynchronously scale and draw existing image back on subsequent resizes
+        const tempImage = new Image();
+        const currentData = canvas.toDataURL('image/webp', 0.85);
+        
+        tempImage.onload = () => {
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
+          const context = canvas.getContext('2d');
+          context.scale(2, 2);
+          context.lineCap = 'round';
+          context.lineJoin = 'round';
+          context.strokeStyle = isEraserRef.current ? '#FFFFFF' : brushColorRef.current;
+          context.lineWidth = isEraserRef.current ? brushSizeRef.current * 2.5 : brushSizeRef.current;
+          contextRef.current = context;
+
+          context.fillStyle = '#FFFFFF';
+          context.fillRect(0, 0, rect.width, rect.height);
+          context.drawImage(tempImage, 0, 0, rect.width, rect.height);
+        };
+        tempImage.src = currentData;
+      }
+    });
+
+    resizeObserver.observe(parent);
+    return () => resizeObserver.disconnect();
+  }, [isInitialized]);
 
   // Load initial image if it changes and canvas is initialized
   useEffect(() => {
@@ -80,35 +136,6 @@ export default function Canvas({ onChange, initialImage, readOnly = false }) {
       // Eraser brush size should be slightly larger for better usability
       contextRef.current.lineWidth = isEraser ? brushSize * 2.5 : brushSize;
     }
-  }, [brushColor, brushSize, isEraser]);
-
-  // Handle resizing
-  useEffect(() => {
-    const handleResize = () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      
-      const tempImage = new Image();
-      const currentData = canvas.toDataURL('image/webp', 0.85);
-      tempImage.src = currentData;
-      
-      tempImage.onload = () => {
-        const rect = canvas.getBoundingClientRect();
-        canvas.width = rect.width * 2;
-        canvas.height = rect.height * 2;
-        contextRef.current = canvas.getContext('2d');
-        contextRef.current.scale(2, 2);
-        contextRef.current.lineCap = 'round';
-        contextRef.current.lineJoin = 'round';
-        contextRef.current.strokeStyle = isEraser ? '#FFFFFF' : brushColor;
-        contextRef.current.lineWidth = isEraser ? brushSize * 2.5 : brushSize;
-        
-        contextRef.current.drawImage(tempImage, 0, 0, rect.width, rect.height);
-      };
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
   }, [brushColor, brushSize, isEraser]);
 
   const pushToHistory = (state) => {
