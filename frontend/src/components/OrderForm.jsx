@@ -1,12 +1,31 @@
-import { fetchWithAuth } from '../App';
 import React, { useState, useEffect } from 'react';
 import Canvas from './Canvas';
-import { Plus, Trash2, CheckCircle2, User, Phone, Scissors, AlertCircle, CheckCircle, Printer, Edit3 } from 'lucide-react';
-import { fetchWithCache, queueOfflineOrder, isOnline } from '../utils/syncManager';
+import { Plus, Trash2, CheckCircle2, User, Phone, Scissors, AlertCircle, CheckCircle, Printer, Edit3, ClipboardList as ClipboardListIcon } from 'lucide-react';
+import { isOnline } from '../utils/syncManager';
+import { useCreateOrder } from '../hooks/useShopData';
+import { db } from '../db';
+import { API_BASE } from '../App';
 
-const API_BASE = ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '' && !window.Capacitor)
-  ? `http://${window.location.hostname}:5000`
-  : (window.Capacitor ? 'https://tailoros-production.up.railway.app' : window.location.origin);
+export const renderBillNumber = (billNumber) => {
+  if (!billNumber) return '—';
+  if (billNumber.startsWith('OFFLINE-')) {
+    return <span className="font-mono font-semibold text-amber-600" title="Pending Sync">⌛ {billNumber.split('-')[1]}</span>;
+  }
+  const parts = billNumber.split('-');
+  if (parts.length >= 3) {
+    const base = `${parts[0]}-${parts[1]}`;
+    const suffix = parts[2];
+    return (
+      <span className="inline-flex items-center gap-1.5 font-semibold text-gray-900">
+        <span className="font-mono">{base}</span>
+        <span className="inline-flex items-center justify-center min-w-5 h-5 px-1 text-2xs font-extrabold text-white bg-indigo-600 rounded-full shadow-sm">
+          {suffix}
+        </span>
+      </span>
+    );
+  }
+  return <span className="font-mono font-semibold text-gray-900">{billNumber}</span>;
+};
 
 const handlePrintInvoice = (selectedOrder) => {
   const { order, customer, items } = selectedOrder;
@@ -33,353 +52,71 @@ const handlePrintInvoice = (selectedOrder) => {
     <html>
       <head>
         <title>${shopName} Invoice - ${order.bill_number}</title>
-        <!-- Load Google Font -->
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-        
-        <!-- html2pdf.js CDN -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-
         <style>
-          * {
-            box-sizing: border-box;
-            font-family: 'Plus Jakarta Sans', sans-serif;
-          }
-          body {
-            background-color: #f1f5f9;
-            color: #0f172a;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-          }
-          
-          /* Top Action/Control Bar */
-          .control-bar {
-            position: sticky;
-            top: 0;
-            width: 100%;
-            background-color: #ffffff;
-            border-bottom: 1px solid #e2e8f0;
-            padding: 12px 24px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            z-index: 100;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
-          }
-          .bar-title {
-            font-size: 16px;
-            font-weight: 700;
-            color: #1e3a8a;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-          }
-          .bar-actions {
-            display: flex;
-            gap: 12px;
-          }
-          .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            border: none;
-          }
-          .btn-primary {
-            background-color: #3b82f6;
-            color: #ffffff;
-          }
-          .btn-primary:hover {
-            background-color: #2563eb;
-          }
-          .btn-success {
-            background-color: #10b981;
-            color: #ffffff;
-          }
-          .btn-success:hover {
-            background-color: #059669;
-          }
-          .btn-secondary {
-            background-color: #64748b;
-            color: #ffffff;
-          }
-          .btn-secondary:hover {
-            background-color: #475569;
-          }
-
-          /* Invoice Page Layout */
-          .invoice-container {
-            padding: 40px 20px;
-            width: 100%;
-            display: flex;
-            justify-content: center;
-          }
-          .invoice-card {
-            background-color: #ffffff;
-            width: 100%;
-            max-width: 800px;
-            padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-            border: 1px solid #e2e8f0;
-          }
-
-          /* Invoice Design Elements */
-          .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            border-bottom: 2px solid #e2e8f0;
-            padding-bottom: 24px;
-            margin-bottom: 24px;
-          }
-          .shop-info {
-            display: flex;
-            flex-direction: column;
-          }
-          .shop-name {
-            font-size: 28px;
-            font-weight: 800;
-            color: #1e3a8a;
-            letter-spacing: -0.025em;
-            margin: 0;
-            line-height: 1.1;
-          }
-          .shop-subtitle {
-            font-size: 12px;
-            font-weight: 600;
-            color: #64748b;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-top: 4px;
-            margin-bottom: 8px;
-          }
-          .shop-details {
-            font-size: 12px;
-            color: #475569;
-            line-height: 1.5;
-          }
-          .invoice-meta {
-            text-align: right;
-          }
-          .invoice-label {
-            font-size: 24px;
-            font-weight: 800;
-            color: #3b82f6;
-            letter-spacing: 0.05em;
-            margin: 0;
-            line-height: 1.1;
-          }
-          .invoice-number {
-            font-size: 16px;
-            font-weight: 700;
-            color: #0f172a;
-            margin-top: 6px;
-            font-family: monospace;
-          }
-
-          .details-grid {
-            display: grid;
-            grid-template-cols: 1fr 1fr;
-            gap: 24px;
-            margin-bottom: 30px;
-          }
-          .details-block {
-            background-color: #f8fafc;
-            border: 1px solid #f1f5f9;
-            border-radius: 8px;
-            padding: 16px;
-          }
-          .details-block-title {
-            font-size: 11px;
-            font-weight: 700;
-            color: #64748b;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 8px;
-            border-bottom: 1px solid #e2e8f0;
-            padding-bottom: 4px;
-          }
-          .details-row {
-            font-size: 13px;
-            line-height: 1.6;
-            color: #334155;
-          }
-          .details-row strong {
-            color: #0f172a;
-          }
-
-          .table-container {
-            margin-bottom: 30px;
-          }
-          .invoice-table {
-            width: 100%;
-            border-collapse: collapse;
-          }
-          .invoice-table th {
-            background-color: #f1f5f9;
-            color: #475569;
-            font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            padding: 10px 8px;
-            border-bottom: 2px solid #e2e8f0;
-          }
-          
-          .financials-section {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-top: 20px;
-          }
-          .notes-block {
-            width: 50%;
-            font-size: 12px;
-            color: #64748b;
-            line-height: 1.5;
-            background-color: #fffbeb;
-            border: 1px solid #fef3c7;
-            padding: 12px;
-            border-radius: 8px;
-          }
-          .notes-title {
-            font-weight: 700;
-            color: #b45309;
-            margin-bottom: 4px;
-            text-transform: uppercase;
-            font-size: 10px;
-            letter-spacing: 0.05em;
-          }
-          
-          .totals-block {
-            width: 40%;
-            border-collapse: collapse;
-          }
-          .totals-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 6px 0;
-            font-size: 13px;
-            color: #475569;
-          }
-          .totals-row.bold {
-            font-weight: 700;
-            color: #0f172a;
-            border-top: 1px solid #e2e8f0;
-            margin-top: 4px;
-            padding-top: 8px;
-          }
-          .totals-row.advance {
-            color: #10b981;
-            font-weight: 600;
-          }
-          .totals-row.balance {
-            color: #ef4444;
-            font-weight: 700;
-            font-size: 16px;
-            border-top: 2px double #e2e8f0;
-            margin-top: 4px;
-            padding-top: 8px;
-          }
-
-          .signature-area {
-            margin-top: 60px;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-          }
-          .thank-you {
-            font-size: 14px;
-            font-weight: 600;
-            color: #1e3a8a;
-            font-style: italic;
-          }
-          .sign-box {
-            text-align: center;
-            width: 200px;
-            border-top: 1px solid #cbd5e1;
-            padding-top: 8px;
-            font-size: 12px;
-            color: #475569;
-            font-weight: 600;
-          }
-
-          .footer {
-            text-align: center;
-            margin-top: 40px;
-            font-size: 11px;
-            color: #94a3b8;
-            border-top: 1px solid #f1f5f9;
-            padding-top: 16px;
-            line-height: 1.4;
-          }
-
-          /* Status Badges */
-          .badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 9999px;
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-          }
+          * { box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; }
+          body { background-color: #f1f5f9; color: #0f172a; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+          .control-bar { position: sticky; top: 0; width: 100%; background-color: #ffffff; border-bottom: 1px solid #e2e8f0; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; z-index: 100; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05); }
+          .bar-title { font-size: 16px; font-weight: 700; color: #1e3a8a; display: flex; align-items: center; gap: 8px; }
+          .bar-actions { display: flex; gap: 12px; }
+          .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; border: none; }
+          .btn-primary { background-color: #3b82f6; color: #ffffff; }
+          .btn-success { background-color: #10b981; color: #ffffff; }
+          .btn-secondary { background-color: #64748b; color: #ffffff; }
+          .invoice-container { padding: 40px 20px; width: 100%; display: flex; justify-content: center; }
+          .invoice-card { background-color: #ffffff; width: 100%; max-width: 800px; padding: 40px; border-radius: 12px; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); border: 1px solid #e2e8f0; }
+          .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #e2e8f0; padding-bottom: 24px; margin-bottom: 24px; }
+          .shop-info { display: flex; flex-direction: column; }
+          .shop-name { font-size: 28px; font-weight: 800; color: #1e3a8a; letter-spacing: -0.025em; margin: 0; line-height: 1.1; }
+          .shop-subtitle { font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; margin-bottom: 8px; }
+          .shop-details { font-size: 12px; color: #475569; line-height: 1.5; }
+          .invoice-meta { text-align: right; }
+          .invoice-label { font-size: 24px; font-weight: 800; color: #3b82f6; letter-spacing: 0.05em; margin: 0; line-height: 1.1; }
+          .invoice-number { font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 6px; font-family: monospace; }
+          .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 30px; }
+          .details-block { background-color: #f8fafc; border: 1px solid #f1f5f9; border-radius: 8px; padding: 16px; }
+          .details-block-title { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+          .details-row { font-size: 13px; line-height: 1.6; color: #334155; }
+          .details-row strong { color: #0f172a; }
+          .table-container { margin-bottom: 30px; }
+          .invoice-table { width: 100%; border-collapse: collapse; }
+          .invoice-table th { background-color: #f1f5f9; color: #475569; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 10px 8px; border-bottom: 2px solid #e2e8f0; }
+          .financials-section { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 20px; }
+          .notes-block { width: 50%; font-size: 12px; color: #64748b; line-height: 1.5; background-color: #fffbeb; border: 1px solid #fef3c7; padding: 12px; border-radius: 8px; }
+          .notes-title { font-weight: 700; color: #b45309; margin-bottom: 4px; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; }
+          .totals-block { width: 40%; border-collapse: collapse; }
+          .totals-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; color: #475569; }
+          .totals-row.bold { font-weight: 700; color: #0f172a; border-top: 1px solid #e2e8f0; margin-top: 4px; padding-top: 8px; }
+          .totals-row.advance { color: #10b981; font-weight: 600; }
+          .totals-row.balance { color: #ef4444; font-weight: 700; font-size: 16px; border-top: 2px double #e2e8f0; margin-top: 4px; padding-top: 8px; }
+          .signature-area { margin-top: 60px; display: flex; justify-content: space-between; align-items: flex-end; }
+          .thank-you { font-size: 14px; font-weight: 600; color: #1e3a8a; font-style: italic; }
+          .sign-box { text-align: center; width: 200px; border-top: 1px solid #cbd5e1; padding-top: 8px; font-size: 12px; color: #475569; font-weight: 600; }
+          .footer { text-align: center; margin-top: 40px; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 16px; line-height: 1.4; }
+          .badge { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
           .badge-red { background-color: #fee2e2; color: #ef4444; }
           .badge-amber { background-color: #fef3c7; color: #d97706; }
           .badge-green { background-color: #d1fae5; color: #10b981; }
-
-          /* Print Overrides */
           @media print {
-            body {
-              background-color: #ffffff;
-              color: #000000;
-            }
-            .control-bar {
-              display: none;
-            }
-            .invoice-container {
-              padding: 0;
-            }
-            .invoice-card {
-              border: none;
-              box-shadow: none;
-              padding: 0;
-              max-width: 100%;
-            }
+            body { background-color: #ffffff; color: #000000; }
+            .control-bar { display: none; }
+            .invoice-container { padding: 0; }
+            .invoice-card { border: none; box-shadow: none; padding: 0; max-width: 100%; }
           }
         </style>
       </head>
       <body>
         <div class="control-bar">
-          <div class="bar-title">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M14 8H8"/><path d="M16 12H8"/><path d="M13 16H8"/></svg>
-            Invoice Preview - ${shopName}
-          </div>
+          <div class="bar-title">Invoice Preview - ${shopName}</div>
           <div class="bar-actions">
-            <button class="btn btn-primary" onclick="window.print()">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v5"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
-              Print Invoice
-            </button>
-            <button class="btn btn-success" onclick="downloadPDF()">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-              Download PDF
-            </button>
-            <button class="btn btn-secondary" onclick="window.close()">
-              Close
-            </button>
+            <button class="btn btn-primary" onclick="window.print()">Print Invoice</button>
+            <button class="btn btn-success" onclick="downloadPDF()">Download PDF</button>
+            <button class="btn btn-secondary" onclick="window.close()">Close</button>
           </div>
         </div>
-
         <div class="invoice-container">
           <div class="invoice-card" id="invoice-card">
             <div class="header">
@@ -392,7 +129,6 @@ const handlePrintInvoice = (selectedOrder) => {
                   </div>
                 </div>
                 <div class="shop-details">
-                  Premium Custom Fitting & Designing<br>
                   Email: ${shopEmail} | Tel: ${shopContact}
                 </div>
               </div>
@@ -403,11 +139,7 @@ const handlePrintInvoice = (selectedOrder) => {
                   Date: ${dateStr} at ${timeStr}
                 </div>
                 <div style="margin-top: 10px;">
-                  <span class="badge ${
-                    order.status === 'Delivered' ? 'badge-green' :
-                    order.status === 'Ready' ? 'badge-amber' :
-                    'badge-red'
-                  }">${order.status}</span>
+                  <span class="badge ${order.status === 'Delivered' ? 'badge-green' : order.status === 'Ready' ? 'badge-amber' : 'badge-red'}">${order.status}</span>
                 </div>
               </div>
             </div>
@@ -423,7 +155,6 @@ const handlePrintInvoice = (selectedOrder) => {
               <div class="details-block">
                 <div class="details-block-title">Invoice Details</div>
                 <div class="details-row">
-                  <strong>Order ID:</strong> <span style="font-family: monospace;">ON${String(order.id).padStart(6, '0')}</span><br>
                   <strong>Bill Reference:</strong> <span style="font-family: monospace;">${order.bill_number}</span><br>
                   <strong>Payment Status:</strong> ${order.balance_amount === 0 ? 'Fully Paid' : 'Balance Pending'}
                 </div>
@@ -475,17 +206,8 @@ const handlePrintInvoice = (selectedOrder) => {
             </div>
 
             <div class="signature-area">
-              <div class="thank-you">
-                Thank you for stitching with us!
-              </div>
-              <div class="sign-box">
-                Authorized Signatory
-              </div>
-            </div>
-
-            <div class="footer">
-              ${shopName} • Bespoke Fine Stitching for Men & Women<br>
-              This is a computer generated invoice and does not require a physical signature.
+              <div class="thank-you">Thank you for stitching with us!</div>
+              <div class="sign-box">Authorized Signatory</div>
             </div>
           </div>
         </div>
@@ -501,7 +223,6 @@ const handlePrintInvoice = (selectedOrder) => {
               jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
             };
             
-            // Show downloading state
             const downloadBtn = document.querySelector('.btn-success');
             const originalText = downloadBtn.innerHTML;
             downloadBtn.innerHTML = 'Generating PDF...';
@@ -524,25 +245,6 @@ const handlePrintInvoice = (selectedOrder) => {
   printWindow.document.close();
 };
 
-// Helper to render Bill Numbers with visually prominent badges for continuation/sub-order suffixes
-export const renderBillNumber = (billNumber) => {
-  if (!billNumber) return '—';
-  const parts = billNumber.split('-');
-  if (parts.length >= 3) {
-    const base = `${parts[0]}-${parts[1]}`;
-    const suffix = parts[2];
-    return (
-      <span className="inline-flex items-center gap-1.5 font-semibold text-gray-900">
-        <span className="font-mono">{base}</span>
-        <span className="inline-flex items-center justify-center min-w-5 h-5 px-1 text-2xs font-extrabold text-white bg-indigo-600 rounded-full shadow-sm">
-          {suffix}
-        </span>
-      </span>
-    );
-  }
-  return <span className="font-mono font-semibold text-gray-900">{billNumber}</span>;
-};
-
 export default function OrderForm({ onOrderCreated }) {
   const [mobileNumber, setMobileNumber]         = useState('');
   const [customerName, setCustomerName]         = useState('');
@@ -560,7 +262,6 @@ export default function OrderForm({ onOrderCreated }) {
   const [initialImage, setInitialImage]         = useState(null);
   const [errorMsg, setErrorMsg]                 = useState('');
   const [successMsg, setSuccessMsg]             = useState('');
-  const [isSubmitting, setIsSubmitting]         = useState(false);
   const [createdOrder, setCreatedOrder]         = useState(null);
 
   // Popups & continuation states
@@ -569,14 +270,14 @@ export default function OrderForm({ onOrderCreated }) {
   const [useLatestBillSeries, setUseLatestBillSeries] = useState(false);
   const [showMeasurementPopup, setShowMeasurementPopup] = useState(false);
 
+  const { mutateAsync: createOrder, isPending: isSubmitting } = useCreateOrder();
   const defaultClothTypes = ['Shirt', 'Pant', 'Suit', 'Safari', 'Kurta', 'Pyjama', 'Sherwani', 'Waistcoat', 'Coat'];
 
-  /* Load configured base prices */
+  /* Load configured base prices via Dexie */
   useEffect(() => {
     (async () => {
       try {
-        const data = await fetchWithCache(`${API_BASE}/api/cloth-configs`, 'cloth_configs', { configs: [] });
-        const cfgs = data.configs || [];
+        const cfgs = await db.cloth_configs.toArray();
         setClothConfigs(cfgs);
         if (cfgs.length > 0) {
           const shirt = cfgs.find(c => c.cloth_type.toLowerCase() === 'shirt');
@@ -590,9 +291,8 @@ export default function OrderForm({ onOrderCreated }) {
     })();
   }, []);
 
-  /* Auto-detect returning customer */
+  /* Auto-detect returning customer via Dexie */
   useEffect(() => {
-    // Clear notifications and saved order on new input
     setSuccessMsg('');
     setErrorMsg('');
     setCreatedOrder(null);
@@ -605,19 +305,24 @@ export default function OrderForm({ onOrderCreated }) {
       setUseLatestBillSeries(false);
       return;
     }
+    
     const timer = setTimeout(async () => {
       setIsCheckingCustomer(true);
       try {
-        const data = await fetchWithCache(`${API_BASE}/api/customers/${mobileNumber}`, `customer_${mobileNumber}`, { exists: false });
-        if (data.exists && data.customer) {
-          setCustomerName(data.customer.customer_name);
+        const cust = await db.customers.where('mobile_number').equals(mobileNumber).first();
+        if (cust) {
+          setCustomerName(cust.customer_name);
           setIsExistingCustomer(true);
-          setInitialImage(data.measurement_image_path ? `${API_BASE}/${data.measurement_image_path}` : null);
-          setCanvasReadOnly(true); // Lock editing by default for existing measurements
-
-          if (data.latest_bill_series) {
-            setDetectedLatestBillSeries(data.latest_bill_series);
-            setShowBillSeriesPopup(true); // Offer sub-order selection
+          
+          // Try to fetch latest order for measurement image and series
+          const latestOrder = await db.orders.where('mobile_number').equals(mobileNumber).reverse().first();
+          if (latestOrder) {
+             setInitialImage(latestOrder.measurement_image_path ? `${API_BASE}/${latestOrder.measurement_image_path}` : null);
+             setCanvasReadOnly(true); 
+             if (latestOrder.bill_number) {
+                setDetectedLatestBillSeries(latestOrder.bill_number);
+                setShowBillSeriesPopup(true);
+             }
           }
         } else {
           setIsExistingCustomer(false);
@@ -631,16 +336,13 @@ export default function OrderForm({ onOrderCreated }) {
     return () => clearTimeout(timer);
   }, [mobileNumber]);
 
-  /* Track canvas modifications */
   const handleCanvasChange = (data) => {
     setCanvasData(data);
-    // On the very first canvas rendering for an existing customer, store the original measurement state
     if (canvasReadOnly && !originalCanvasData) {
       setOriginalCanvasData(data);
     }
   };
 
-  /* Item table helpers */
   const handleItemChange = (i, field, val) => {
     const next = [...items];
     if (field === 'quantity')       next[i][field] = parseInt(val, 10)  || 0;
@@ -654,6 +356,7 @@ export default function OrderForm({ onOrderCreated }) {
     }
     setItems(next);
   };
+  
   const addRow    = () => setItems([...items, { cloth_type: clothConfigs[0]?.cloth_type ?? 'Shirt', quantity: 1, price_per_cloth: clothConfigs[0]?.default_price ?? 500 }]);
   const removeRow = (i) => { if (items.length > 1) setItems(items.filter((_, idx) => idx !== i)); };
 
@@ -661,7 +364,6 @@ export default function OrderForm({ onOrderCreated }) {
   const totalAmt   = items.reduce((s, it) => s + rowTotal(it), 0);
   const balanceAmt = totalAmt - advancePaid;
 
-  /* Submit flow with measurement protection */
   const handleSubmit = (e) => {
     e.preventDefault();
     setErrorMsg(''); setSuccessMsg('');
@@ -670,7 +372,6 @@ export default function OrderForm({ onOrderCreated }) {
     if (items.some(it => !it.cloth_type || it.quantity <= 0 || it.price_per_cloth <= 0)) return setErrorMsg('All item rows must have a valid cloth type, quantity, and price.');
     if (!canvasData)                                        return setErrorMsg('Please draw the measurements on the canvas before saving.');
 
-    // If returning customer and canvas measurements were modified, prompt protection dialog
     const isMeasurementModified = isExistingCustomer && originalCanvasData && canvasData !== originalCanvasData;
     if (isMeasurementModified) {
       setShowMeasurementPopup(true);
@@ -680,90 +381,9 @@ export default function OrderForm({ onOrderCreated }) {
   };
 
   const submitOrder = async (imageToSave) => {
-    setIsSubmitting(true);
     setErrorMsg('');
-
-    if (!isOnline()) {
-      // Save offline
-      const offlinePayload = {
-        mobile_number: mobileNumber.trim(),
-        customer_name: customerName.trim(),
-        order_items: items,
-        total_amount: totalAmt,
-        advance_amount: parseFloat(advancePaid) || 0,
-        balance_amount: balanceAmt,
-        measurement_image: imageToSave,
-        use_latest_bill_series: useLatestBillSeries
-      };
-      
-      const offlineOrder = queueOfflineOrder(offlinePayload);
-      setSuccessMsg('Order saved locally! It will automatically backup to the cloud once you connect.');
-      setCreatedOrder({ order: offlineOrder });
-      
-      // Reset form states
-      setMobileNumber('');
-      setCustomerName('');
-      setIsExistingCustomer(false);
-      setInitialImage(null);
-      setOriginalCanvasData(null);
-      setCanvasReadOnly(false);
-      setUseLatestBillSeries(false);
-      setAdvancePaid(0);
-
-      const shirt = clothConfigs.find(c => c.cloth_type.toLowerCase() === 'shirt');
-      const pant  = clothConfigs.find(c => c.cloth_type.toLowerCase() === 'pant');
-      setItems([
-        { cloth_type: shirt?.cloth_type ?? 'Shirt', quantity: 1, price_per_cloth: shirt?.default_price ?? 500 },
-        { cloth_type: pant?.cloth_type  ?? 'Pant',  quantity: 1, price_per_cloth: pant?.default_price  ?? 600 },
-      ]);
-      setIsSubmitting(false);
-      if (onOrderCreated) onOrderCreated(offlineOrder);
-      return;
-    }
-
     try {
-      const res  = await fetchWithAuth(`${API_BASE}/api/orders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mobile_number: mobileNumber.trim(),
-          customer_name: customerName.trim(),
-          order_items: items,
-          total_amount: totalAmt,
-          advance_amount: parseFloat(advancePaid) || 0,
-          balance_amount: balanceAmt,
-          measurement_image: imageToSave,
-          use_latest_bill_series: useLatestBillSeries
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setSuccessMsg('Order saved successfully!');
-        setCreatedOrder(data); // Save full response for printing/rendering
-
-        // Reset form states
-        setMobileNumber('');
-        setCustomerName('');
-        setIsExistingCustomer(false);
-        setInitialImage(null);
-        setOriginalCanvasData(null);
-        setCanvasReadOnly(false);
-        setUseLatestBillSeries(false);
-        setAdvancePaid(0);
-
-        const shirt = clothConfigs.find(c => c.cloth_type.toLowerCase() === 'shirt');
-        const pant  = clothConfigs.find(c => c.cloth_type.toLowerCase() === 'pant');
-        setItems([
-          { cloth_type: shirt?.cloth_type ?? 'Shirt', quantity: 1, price_per_cloth: shirt?.default_price ?? 500 },
-          { cloth_type: pant?.cloth_type  ?? 'Pant',  quantity: 1, price_per_cloth: pant?.default_price  ?? 600 },
-        ]);
-        if (onOrderCreated) onOrderCreated(data.order);
-      } else {
-        setErrorMsg(data.message || 'Failed to save order.');
-      }
-    } catch (e) {
-      console.warn('Network error during online order submission, saving offline instead:', e);
-      const offlinePayload = {
+      const orderPayload = {
         mobile_number: mobileNumber.trim(),
         customer_name: customerName.trim(),
         order_items: items,
@@ -774,11 +394,11 @@ export default function OrderForm({ onOrderCreated }) {
         use_latest_bill_series: useLatestBillSeries
       };
       
-      const offlineOrder = queueOfflineOrder(offlinePayload);
-      setSuccessMsg('Saved locally due to connection error! It will backup once connection is restored.');
-      setCreatedOrder({ order: offlineOrder });
+      const newOrder = await createOrder(orderPayload);
       
-      // Reset form states
+      setSuccessMsg('Order saved successfully! It will automatically sync in the background.');
+      setCreatedOrder({ order: newOrder, customer: { customer_name: customerName, mobile_number: mobileNumber }, items });
+
       setMobileNumber('');
       setCustomerName('');
       setIsExistingCustomer(false);
@@ -794,8 +414,13 @@ export default function OrderForm({ onOrderCreated }) {
         { cloth_type: shirt?.cloth_type ?? 'Shirt', quantity: 1, price_per_cloth: shirt?.default_price ?? 500 },
         { cloth_type: pant?.cloth_type  ?? 'Pant',  quantity: 1, price_per_cloth: pant?.default_price  ?? 600 },
       ]);
-      if (onOrderCreated) onOrderCreated(offlineOrder);
-    } finally { setIsSubmitting(false); }
+      
+      if (onOrderCreated) onOrderCreated(newOrder);
+
+    } catch (e) {
+      console.error(e);
+      setErrorMsg('Failed to save order.');
+    }
   };
 
   return (
@@ -806,13 +431,11 @@ export default function OrderForm({ onOrderCreated }) {
         ))}
       </datalist>
 
-      {/* Page heading */}
       <div className="flex items-center gap-2">
         <ClipboardListIcon className="w-4 h-4 text-gray-400" />
         <h1 className="text-sm font-semibold text-gray-700">New Order</h1>
       </div>
 
-      {/* ── MEASUREMENT CANVAS ──────────────────────────── */}
       <div className="card overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
           <p className="text-sm font-semibold text-gray-800">Measurement Sheet</p>
@@ -843,10 +466,7 @@ export default function OrderForm({ onOrderCreated }) {
         </div>
       </div>
 
-      {/* ── CUSTOMER + ITEMS GRID ───────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-        {/* Customer Details */}
         <div className="card p-5 flex flex-col gap-4">
           <div className="flex items-center gap-2 pb-3 border-b border-gray-100">
             <User className="w-4 h-4 text-gray-400" />
@@ -864,7 +484,7 @@ export default function OrderForm({ onOrderCreated }) {
                 className="field-input pl-9"
               />
             </div>
-            {isCheckingCustomer && <p className="text-xs text-gray-400 mt-1">Checking records…</p>}
+            {isCheckingCustomer && <p className="text-xs text-gray-400 mt-1">Checking local DB...</p>}
             {isExistingCustomer && !isCheckingCustomer && (
               <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
                 <CheckCircle className="w-3 h-3" /> Returning customer detected
@@ -889,7 +509,6 @@ export default function OrderForm({ onOrderCreated }) {
           </div>
         </div>
 
-        {/* Clothes Entry Table */}
         <div className="card p-5 lg:col-span-2 flex flex-col gap-4">
           <div className="flex items-center gap-2 pb-3 border-b border-gray-100">
             <Scissors className="w-4 h-4 text-gray-400" />
@@ -900,49 +519,45 @@ export default function OrderForm({ onOrderCreated }) {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th style={{width:'40%'}}>Cloth Type</th>
-                  <th style={{width:'15%'}}>Qty</th>
-                  <th style={{width:'25%'}}>Rate (₹)</th>
-                  <th style={{width:'20%'}} className="text-right">Total</th>
+                  <th style={{ width: '40%' }}>Cloth Type</th>
+                  <th style={{ width: '20%' }} className="text-center">Quantity</th>
+                  <th style={{ width: '25%' }} className="text-right">Price per piece</th>
+                  <th style={{ width: '15%' }} className="text-center">Action</th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50">
-                    <td className="pr-1 sm:pr-2">
+                {items.map((it, i) => (
+                  <tr key={i}>
+                    <td>
                       <input
-                        type="text" list="cloth-types" value={item.cloth_type} required
-                        onChange={(e) => handleItemChange(idx, 'cloth_type', e.target.value)}
-                        className="field-input px-1.5 sm:px-3 py-1.5 text-xs min-w-[70px] sm:min-w-[auto]"
+                        list="cloth-types"
+                        type="text" value={it.cloth_type} required
+                        onChange={(e) => handleItemChange(i, 'cloth_type', e.target.value)}
+                        placeholder="e.g. Shirt"
+                        className="field-input"
                       />
                     </td>
-                    <td className="px-0.5 sm:px-1">
+                    <td>
                       <input
-                        type="number" min={1} value={item.quantity} required
-                        onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
-                        className="field-input px-1 sm:px-3 py-1.5 text-xs text-center min-w-[40px] sm:min-w-[auto]"
+                        type="number" min="1" value={it.quantity} required
+                        onChange={(e) => handleItemChange(i, 'quantity', e.target.value)}
+                        className="field-input text-center font-mono"
                       />
                     </td>
-                    <td className="px-0.5 sm:px-1">
+                    <td>
                       <div className="relative">
-                        <span className="absolute left-1.5 sm:left-2.5 top-1.5 text-gray-400 text-xs">₹</span>
+                        <span className="absolute left-3 top-2 text-gray-400 text-sm">₹</span>
                         <input
-                          type="number" min={0} value={item.price_per_cloth} required
-                          onChange={(e) => handleItemChange(idx, 'price_per_cloth', e.target.value)}
-                          className="field-input pl-4 sm:pl-6 pr-1 sm:pr-3 py-1.5 text-xs min-w-[60px] sm:min-w-[auto]"
+                          type="number" min="0" value={it.price_per_cloth} required
+                          onChange={(e) => handleItemChange(i, 'price_per_cloth', e.target.value)}
+                          className="field-input pl-7 text-right font-mono"
                         />
                       </div>
                     </td>
-                    <td className="text-right pl-2">
-                      <div className="flex items-center justify-end gap-2">
-                        <span className="font-semibold text-gray-900 text-sm">₹{rowTotal(item)}</span>
-                        <button
-                          type="button" onClick={() => removeRow(idx)} disabled={items.length === 1}
-                          className={`p-1 rounded transition ${items.length === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'}`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                    <td className="text-center">
+                      <button type="button" onClick={() => removeRow(i)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors" title="Remove item">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -950,191 +565,162 @@ export default function OrderForm({ onOrderCreated }) {
             </table>
           </div>
 
-          <div className="border-t border-gray-100 pt-3">
-            <button type="button" onClick={addRow} className="btn-secondary text-xs py-1.5">
-              <Plus className="w-3.5 h-3.5" /> Add Row
-            </button>
+          <button type="button" onClick={addRow} className="btn-ghost self-start mt-2 border border-gray-200 shadow-sm text-gray-600 hover:bg-gray-50 flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Add Item
+          </button>
+        </div>
+      </div>
+
+      <div className="card p-5">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <div className="w-full md:w-1/3">
+            <label className="section-label mb-2 block text-gray-700">Advance Amount Paid</label>
+            <div className="relative">
+              <span className="absolute left-4 top-3 text-gray-500 font-medium">₹</span>
+              <input
+                type="number" min="0" max={totalAmt} value={advancePaid}
+                onChange={(e) => setAdvancePaid(e.target.value)}
+                className="w-full bg-gray-50 border border-gray-200 text-gray-900 rounded-lg pl-8 pr-4 py-3 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all font-mono font-medium text-lg"
+              />
+            </div>
+            <p className="text-xs text-gray-400 mt-2 flex items-center gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5" /> Advance cannot exceed total amount
+            </p>
           </div>
 
-          {/* Financials */}
-          <div className="mt-auto border-t border-gray-100 pt-4 grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
-            <div className="bg-gray-50 border border-gray-200 rounded-md px-4 py-2.5">
-              <p className="section-label mb-1">Total Amount</p>
-              <p className="text-lg font-bold text-gray-900">₹{totalAmt}</p>
+          <div className="w-full md:w-2/3 grid grid-cols-3 gap-3 bg-gray-50 p-4 rounded-xl border border-gray-100">
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Total</p>
+              <p className="text-xl font-mono text-gray-900 font-bold">₹{totalAmt}</p>
             </div>
-
-            <div className="bg-white border border-gray-200 rounded-md px-4 py-2.5">
-              <p className="section-label mb-1">Advance Paid</p>
-              <div className="flex items-center gap-1">
-                <span className="text-gray-400 text-sm">₹</span>
-                <input
-                  type="number" min={0} max={totalAmt} value={advancePaid}
-                  onChange={(e) => setAdvancePaid(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-transparent text-lg font-bold text-emerald-600 focus:outline-none"
-                />
-              </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Advance</p>
+              <p className="text-xl font-mono text-emerald-600 font-bold">₹{advancePaid || 0}</p>
             </div>
-
-            <div className="bg-gray-50 border border-gray-200 rounded-md px-4 py-2.5">
-              <p className="section-label mb-1">Balance Due</p>
-              <p className="text-lg font-bold text-red-500">₹{balanceAmt}</p>
+            <div className="border-l border-gray-200 pl-3">
+              <p className="text-xs font-bold text-red-500 uppercase tracking-wider mb-1">Balance Due</p>
+              <p className="text-2xl font-mono text-red-600 font-black">₹{balanceAmt}</p>
             </div>
-
-            <button
-              type="submit" disabled={isSubmitting}
-              className="btn-primary justify-center py-3 text-sm"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              {isSubmitting ? 'Saving…' : 'Save Order'}
-            </button>
           </div>
         </div>
       </div>
 
-      {/* Alerts */}
       {errorMsg && (
-        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md text-sm">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          {errorMsg}
-        </div>
-      )}
-      {successMsg && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-lg text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <CheckCircle className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="font-semibold">{successMsg}</p>
-              {createdOrder?.order && (
-                <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                  <span className="flex items-center gap-1">
-                    <strong>Order ID:</strong>
-                    <span className="font-mono text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded border border-brand-100 font-bold">
-                      ON{String(createdOrder.order.id).padStart(6, '0')}
-                    </span>
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <strong>Bill No:</strong>
-                    {renderBillNumber(createdOrder.order.bill_number)}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-          {createdOrder && (
-            <button
-              type="button"
-              onClick={() => handlePrintInvoice(createdOrder)}
-              className="btn-primary bg-emerald-600 hover:bg-emerald-700 text-white text-xs py-2 px-4 flex items-center gap-1.5 shadow-sm shrink-0"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Print / PDF Bill</span>
-            </button>
-          )}
+        <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center gap-3 border border-red-100 animate-in fade-in slide-in-from-bottom-2">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <p className="text-sm font-medium">{errorMsg}</p>
         </div>
       )}
 
-      {/* Bill Series Continuation Popup */}
-      {showBillSeriesPopup && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden border border-gray-100 animate-in fade-in zoom-in duration-200 pointer-events-auto">
-            <div className="p-6">
-              <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-4">
-                <User className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900">Customer Found</h3>
-              <p className="text-sm text-gray-500 mt-2">
-                This customer has a previous order series.
-              </p>
-              <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3 flex justify-between items-center">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Latest Bill Series</span>
-                <span className="font-mono font-bold text-brand-600 bg-brand-50 px-2 py-0.5 rounded border border-brand-100">
-                  {detectedLatestBillSeries}
+      {successMsg && createdOrder && (
+        <div className="bg-emerald-50 border border-emerald-200 p-5 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in zoom-in-95 duration-300">
+          <div className="flex items-center gap-3">
+            <div className="bg-emerald-100 p-2 rounded-full">
+              <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-emerald-800 font-bold">{successMsg}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-sm text-emerald-600">Bill No:</span>
+                <span className="font-mono text-sm font-bold bg-white px-2 py-0.5 rounded shadow-sm text-emerald-700">
+                  {createdOrder.order.bill_number}
                 </span>
               </div>
-              <p className="text-xs text-gray-400 mt-3">
-                Would you like to continue the same bill series (e.g. create a sub-order)?
-              </p>
             </div>
-            <div className="bg-gray-50 px-6 py-4 flex flex-row-reverse gap-3 border-t border-gray-100">
-              <button
+          </div>
+          
+          <button 
+            type="button"
+            onClick={() => handlePrintInvoice(createdOrder)}
+            className="whitespace-nowrap btn-primary bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-6 rounded-lg shadow-lg shadow-emerald-200 flex items-center justify-center gap-2 transition-all transform hover:scale-105 active:scale-95"
+          >
+            <Printer className="w-4 h-4" />
+            Print Invoice
+          </button>
+        </div>
+      )}
+
+      <div className="flex justify-end pt-4 border-t border-gray-100 mt-2">
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="btn-primary w-full md:w-auto px-10 py-3.5 text-base shadow-xl shadow-brand-200 transition-all flex justify-center items-center gap-2 group"
+        >
+          {isSubmitting ? (
+            <>
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              Saving...
+            </>
+          ) : (
+            <>
+              Save Order & Generate Bill
+              <svg className="w-4 h-4 transition-transform group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            </>
+          )}
+        </button>
+      </div>
+
+      {showBillSeriesPopup && (
+        <div className="modal-overlay">
+          <div className="modal-panel max-w-sm text-center">
+            <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center mx-auto mb-4">
+              <ClipboardListIcon className="w-6 h-6 text-indigo-600" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Previous Bill Found</h3>
+            <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+              This customer's latest order is <strong className="text-gray-900 font-mono">{detectedLatestBillSeries}</strong>.<br/><br/>
+              Would you like to link this new order to the same bill (e.g. adding a suffix like -1, -2)?
+            </p>
+            <div className="flex gap-3">
+              <button 
                 type="button"
-                onClick={() => {
-                  setUseLatestBillSeries(true);
-                  setShowBillSeriesPopup(false);
-                }}
-                className="btn-primary px-5 py-2 text-xs font-bold"
+                onClick={() => { setUseLatestBillSeries(false); setShowBillSeriesPopup(false); }}
+                className="flex-1 btn-secondary py-2.5"
               >
-                Yes, Use Same Series
+                No, New Bill
               </button>
-              <button
+              <button 
                 type="button"
-                onClick={() => {
-                  setUseLatestBillSeries(false);
-                  setShowBillSeriesPopup(false);
-                }}
-                className="btn-secondary px-5 py-2 text-xs font-bold bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                onClick={() => { setUseLatestBillSeries(true); setShowBillSeriesPopup(false); }}
+                className="flex-1 btn-primary bg-indigo-600 hover:bg-indigo-700 py-2.5"
               >
-                No, Start New Series
+                Yes, Link Bill
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Measurement Protection Popup */}
       {showMeasurementPopup && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden border border-gray-100 animate-in fade-in zoom-in duration-200 pointer-events-auto">
-            <div className="p-6">
-              <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mb-4">
-                <AlertCircle className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900">Measurement Changes Detected</h3>
-              <p className="text-sm text-gray-500 mt-2 leading-relaxed font-medium">
-                Measurement changes detected. Do you want to update the customer's saved measurements?
-              </p>
+        <div className="modal-overlay z-[200]">
+          <div className="modal-panel max-w-sm text-center">
+            <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-6 h-6 text-amber-600" />
             </div>
-            <div className="bg-gray-50 px-6 py-4 flex flex-col sm:flex-row-reverse gap-2 border-t border-gray-100">
-              <button
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Update Measurement Sheet?</h3>
+            <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+              You have modified the measurements for this returning customer.<br/>
+              Saving this order will permanently update their master measurement sheet.
+            </p>
+            <div className="flex gap-3">
+              <button 
                 type="button"
-                onClick={() => {
-                  setShowMeasurementPopup(false);
-                  submitOrder(canvasData);
-                }}
-                className="btn-primary justify-center px-4 py-2.5 text-xs font-bold"
+                onClick={() => { setShowMeasurementPopup(false); setCanvasData(originalCanvasData); }}
+                className="flex-1 btn-secondary py-2.5 text-xs"
               >
-                Save Changes
+                Discard Changes
               </button>
-              <button
+              <button 
                 type="button"
-                onClick={() => {
-                  setShowMeasurementPopup(false);
-                  submitOrder(originalCanvasData);
-                }}
-                className="btn-secondary justify-center px-4 py-2.5 text-xs font-bold bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                onClick={() => { setShowMeasurementPopup(false); submitOrder(canvasData); }}
+                className="flex-1 btn-primary bg-amber-600 hover:bg-amber-700 py-2.5 text-xs"
               >
-                Keep Existing Measurements
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowMeasurementPopup(false)}
-                className="btn-ghost justify-center px-4 py-2.5 text-xs font-semibold text-gray-500 hover:text-gray-700"
-              >
-                Cancel
+                Yes, Save Updates
               </button>
             </div>
           </div>
         </div>
       )}
     </form>
-  );
-}
-
-/* Inline icon to avoid extra import */
-function ClipboardListIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-    </svg>
   );
 }

@@ -3,31 +3,48 @@ import React, { useState, useEffect } from 'react';
 import { 
   BarChart, TrendingUp, TrendingDown, Users, DollarSign, Calendar, 
   Lightbulb, Home, Edit2, Check, X, ArrowUpDown, ChevronDown, 
-  Plus, Trash2, Settings, UserPlus, Save 
+  Plus, Trash2, Settings, UserPlus, Save, Loader2 
 } from 'lucide-react';
+import { useAnalyticsSummary, useAnalyticsDaily, useAnalyticsYearly } from '../hooks/useShopData';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function Analytics() {
   const API_BASE = ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '' && !window.Capacitor)
     ? `http://${window.location.hostname}:5000`
     : (window.Capacitor ? 'https://tailoros-production.up.railway.app' : window.location.origin);
 
-  // Month tracking (generate the last 12 months)
+  const queryClient = useQueryClient();
   const [viewMode, setViewMode] = useState('monthly');
   const [selectedMonth, setSelectedMonth] = useState('');
   const [monthsList, setMonthsList] = useState([]);
   const [selectedYear, setSelectedYear] = useState('');
   const [yearsList, setYearsList] = useState([]);
-  const [yearlyStats, setYearlyStats] = useState([]);
 
-  // Monthly summary stats
-  const [summary, setSummary] = useState({
-    revenue: 0,
-    rent: 10000,
-    electricity: 2000,
-    salariesPaid: 0,
-    customExpensesPaid: 0,
-    profit: -12000
-  });
+  // TanStack Queries
+  const { data: monthlySummaryData, isLoading: isLoadingMonthlySummary, isFetching: isFetchingMonthly } = useAnalyticsSummary(viewMode === 'monthly' ? selectedMonth : null);
+  const { data: dailyStatsData, isLoading: isLoadingDailyStats, isFetching: isFetchingDaily } = useAnalyticsDaily(viewMode === 'monthly' ? selectedMonth : null);
+  const { data: yearlyStatsData, isLoading: isLoadingYearlyStats, isFetching: isFetchingYearly } = useAnalyticsYearly(viewMode === 'yearly' ? selectedYear : null);
+
+  const dailyStats = dailyStatsData?.dailyStats || [];
+  const yearlyStats = yearlyStatsData?.yearlyStats || [];
+  
+  let summary = { revenue: 0, rent: 10000, electricity: 2000, salariesPaid: 0, customExpensesPaid: 0, profit: -12000 };
+  
+  if (viewMode === 'monthly' && monthlySummaryData) {
+     summary = monthlySummaryData;
+  } else if (viewMode === 'yearly' && yearlyStatsData) {
+     const totalRev = yearlyStats.reduce((s, d) => s + d.revenue, 0);
+     const totalExp = yearlyStats.reduce((s, d) => s + d.expense, 0);
+     summary = {
+       revenue: totalRev,
+       rent: 0,
+       electricity: 0,
+       salariesPaid: totalExp,
+       customExpensesPaid: 0,
+       profit: totalRev - totalExp
+     };
+  }
+
 
   // Edit overhead bills state
   const [isEditingExpenses, setIsEditingExpenses] = useState(false);
@@ -67,8 +84,6 @@ export default function Analytics() {
   // Clickable Charts Modal state
   const [showRevenueChartModal, setShowRevenueChartModal] = useState(false);
   const [showProfitChartModal, setShowProfitChartModal] = useState(false);
-  const [dailyStats, setDailyStats] = useState([]);
-  const [isLoadingDaily, setIsLoadingDaily] = useState(false);
 
   // Generate list of months for selection
   useEffect(() => {
@@ -95,21 +110,13 @@ export default function Analytics() {
     setSelectedYear(years[0]);
   }, []);
 
-  // Fetch summary when month changes
-  const fetchSummary = async () => {
-    if (!selectedMonth) return;
-    try {
-      const res = await fetchWithAuth(`${API_BASE}/api/analytics/summary?month=${selectedMonth}`);
-      if (res.ok) {
-        const data = await res.json();
-        setSummary(data);
-        setRentInput(data.rent);
-        setElectricityInput(data.electricity);
-      }
-    } catch (error) {
-      console.error('Error fetching analytics summary:', error);
+  // Sync inputs with monthly data when it loads
+  useEffect(() => {
+    if (viewMode === 'monthly' && monthlySummaryData) {
+      setRentInput(monthlySummaryData.rent || 0);
+      setElectricityInput(monthlySummaryData.electricity || 0);
     }
-  };
+  }, [monthlySummaryData, viewMode]);
 
   // Fetch custom expenses
   const fetchCustomExpenses = async () => {
@@ -128,24 +135,6 @@ export default function Analytics() {
     }
   };
 
-  // Fetch daily break-down for charts
-  const fetchDailyBreakdown = async () => {
-    if (!selectedMonth) return;
-    setIsLoadingDaily(true);
-    try {
-      const res = await fetchWithAuth(`${API_BASE}/api/analytics/daily?month=${selectedMonth}`);
-      if (res.ok) {
-        const data = await res.json();
-        setDailyStats(data.dailyStats || []);
-      }
-    } catch (error) {
-      console.error('Error loading daily stats breakdown:', error);
-    } finally {
-      setIsLoadingDaily(false);
-    }
-  };
-
-  // Fetch cloth default pricing configurations
   const fetchClothConfigs = async () => {
     setIsLoadingClothConfigs(true);
     try {
@@ -161,47 +150,11 @@ export default function Analytics() {
     }
   };
 
-  // Fetch yearly break-down
-  const fetchYearlyBreakdown = async () => {
-    if (!selectedYear) return;
-    setIsLoadingDaily(true);
-    try {
-      const res = await fetchWithAuth(`${API_BASE}/api/analytics/yearly?year=${selectedYear}`);
-      if (res.ok) {
-        const data = await res.json();
-        setYearlyStats(data.yearlyStats || []);
-        
-        const totalRev = (data.yearlyStats || []).reduce((s, d) => s + d.revenue, 0);
-        const totalExp = (data.yearlyStats || []).reduce((s, d) => s + d.expense, 0);
-        setSummary({
-          revenue: totalRev,
-          rent: 0,
-          electricity: 0,
-          salariesPaid: totalExp, // mapped strictly for summary visual
-          customExpensesPaid: 0,
-          profit: totalRev - totalExp
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching yearly breakdown:', error);
-    } finally {
-      setIsLoadingDaily(false);
-    }
-  };
-
   useEffect(() => {
-    if (viewMode === 'monthly') {
-      if (selectedMonth) {
-        fetchSummary();
-        fetchCustomExpenses();
-        fetchDailyBreakdown();
-      }
-    } else {
-      if (selectedYear) {
-        fetchYearlyBreakdown();
-      }
+    if (viewMode === 'monthly' && selectedMonth) {
+      fetchCustomExpenses();
     }
-  }, [selectedMonth, selectedYear, viewMode]);
+  }, [selectedMonth, viewMode]);
 
   useEffect(() => {
     fetchClothConfigs();
@@ -246,8 +199,7 @@ export default function Analytics() {
       });
       if (res.ok) {
         setIsEditingExpenses(false);
-        fetchSummary();
-        fetchDailyBreakdown(); // Recalculate daily profit values
+        queryClient.invalidateQueries({ queryKey: ['analytics'] });
       }
     } catch (error) {
       console.error('Error saving expenses:', error);
@@ -275,8 +227,7 @@ export default function Analytics() {
         setNewExpenseName('');
         setNewExpenseAmount('');
         fetchCustomExpenses();
-        fetchSummary();
-        fetchDailyBreakdown();
+        queryClient.invalidateQueries({ queryKey: ['analytics'] });
       }
     } catch (error) {
       console.error('Error adding custom expense:', error);
@@ -293,8 +244,7 @@ export default function Analytics() {
       });
       if (res.ok) {
         fetchCustomExpenses();
-        fetchSummary();
-        fetchDailyBreakdown();
+        queryClient.invalidateQueries({ queryKey: ['analytics'] });
       }
     } catch (error) {
       console.error('Error deleting custom expense:', error);
@@ -320,7 +270,7 @@ export default function Analytics() {
         setNewEmployeeSalary('');
         setShowAddEmployeeForm(false);
         fetchSalaries();
-        fetchSummary();
+        queryClient.invalidateQueries({ queryKey: ['analytics'] });
       }
     } catch (error) {
       console.error('Error adding employee:', error);
@@ -344,8 +294,7 @@ export default function Analytics() {
         setEditingEmployeeId(null);
         setEditingEmployeeSalary('');
         fetchSalaries();
-        fetchSummary();
-        fetchDailyBreakdown();
+        queryClient.invalidateQueries({ queryKey: ['analytics'] });
       }
     } catch (error) {
       console.error('Error updating base salary:', error);
@@ -391,8 +340,7 @@ export default function Analytics() {
       });
       if (res.ok) {
         fetchSalaries();
-        fetchSummary();
-        fetchDailyBreakdown();
+        queryClient.invalidateQueries({ queryKey: ['analytics'] });
       }
     } catch (error) {
       console.error('Error toggling salary:', error);

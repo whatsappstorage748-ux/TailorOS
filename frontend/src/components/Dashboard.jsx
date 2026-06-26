@@ -2,7 +2,9 @@ import { fetchWithAuth } from '../App';
 import React, { useState, useEffect } from 'react';
 import { Search, Package, CheckCircle, Clock, IndianRupee, Calendar, Eye, X, CheckCircle2, Printer } from 'lucide-react';
 import { renderBillNumber } from './OrderForm';
-import { fetchWithCache, isOnline, queueOfflineRequest } from '../utils/syncManager';
+import { isOnline } from '../utils/syncManager';
+import { useDashboardStats, useOrders, useUpdateOrderStatus } from '../hooks/useShopData';
+import { useQueryClient } from '@tanstack/react-query';
 
 const API_BASE = ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '' && !window.Capacitor)
   ? `http://${window.location.hostname}:5000`
@@ -549,34 +551,28 @@ function StatCard({ icon: Icon, label, value, iconBg, iconColor }) {
 }
 
 export default function Dashboard({ refreshTrigger }) {
-  const [stats, setStats] = useState({ totalOrders: 0, undeliveredOrders: 0, deliveredOrders: 0, todayRevenue: 0, todayOrders: 0 });
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
-  const [orders, setOrders] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [isCompleting, setIsCompleting] = useState(false);
-  const [isReadying, setIsReadying] = useState(false);
 
-  const fetchData = async () => {
-    try {
-      setIsLoading(true);
-      const statsData = await fetchWithCache(`${API_BASE}/api/dashboard/stats`, 'dashboard_stats', { totalOrders: 0, undeliveredOrders: 0, deliveredOrders: 0, todayRevenue: 0, todayOrders: 0 });
-      setStats(statsData);
-      
-      const cacheKey = searchQuery ? `orders_search_${searchQuery}` : 'dashboard_orders';
-      const ordersData = await fetchWithCache(`${API_BASE}/api/orders/search?q=${searchQuery}`, cacheKey, { orders: [] });
-      setOrders(ordersData.orders || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsLoading(false);
+  // TanStack Query Hooks
+  const { data: statsData, isLoading: isStatsLoading } = useDashboardStats();
+  const { data: ordersData, isLoading: isOrdersLoading, isFetching: isOrdersFetching } = useOrders(searchQuery);
+  const { mutate: updateStatus, isPending: isUpdatingStatus } = useUpdateOrderStatus();
+
+  const stats = statsData || { totalOrders: 0, undeliveredOrders: 0, deliveredOrders: 0, todayRevenue: 0, todayOrders: 0 };
+  const orders = ordersData?.orders || [];
+  const isLoading = isStatsLoading || isOrdersLoading;
+
+  useEffect(() => {
+    // If App.jsx triggers a global refresh (e.g., from syncManager)
+    if (refreshTrigger > 0) {
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
     }
-  };
-
-  useEffect(() => { fetchData(); }, [searchQuery, refreshTrigger]);
+  }, [refreshTrigger, queryClient]);
 
   const openOrder = async (billNo) => {
-    // Find locally first
     const localOrder = orders.find(o => o.bill_number === billNo);
     if (localOrder) {
       setSelectedOrder({
@@ -591,65 +587,19 @@ export default function Dashboard({ refreshTrigger }) {
     } catch (err) { console.error(err); }
   };
 
-  const updateDashboardCacheStatus = (billNo, status) => {
-    const cachedOrdersName = 'tailor_cache_dashboard_orders';
-    const cachedOrders = JSON.parse(localStorage.getItem(cachedOrdersName) || '{"orders":[]}');
-    if (cachedOrders.orders) {
-      cachedOrders.orders = cachedOrders.orders.map(o => o.bill_number === billNo ? { ...o, status } : o);
-      localStorage.setItem(cachedOrdersName, JSON.stringify(cachedOrders));
+  const handleComplete = (billNo) => {
+    // Optimistic update handled by TanStack mutation
+    updateStatus({ billNo, action: 'complete' });
+    if (selectedOrder && selectedOrder.order.bill_number === billNo) {
+      setSelectedOrder(prev => ({ ...prev, order: { ...prev.order, status: 'Delivered' } }));
     }
   };
 
-  const handleComplete = async (billNo) => {
-    setIsCompleting(true);
-    // Optimistic local state update for offline responsiveness
-    setOrders(prev => prev.map(o => o.bill_number === billNo ? { ...o, status: 'Delivered' } : o));
-    
-    if (!isOnline()) {
-      queueOfflineRequest(`/api/orders/${billNo}/complete`, 'PUT', {});
-      updateDashboardCacheStatus(billNo, 'Delivered');
-      setIsCompleting(false);
-      return;
+  const handleReady = (billNo) => {
+    updateStatus({ billNo, action: 'ready' });
+    if (selectedOrder && selectedOrder.order.bill_number === billNo) {
+      setSelectedOrder(prev => ({ ...prev, order: { ...prev.order, status: 'Ready' } }));
     }
-
-    try {
-      const res = await fetchWithAuth(`${API_BASE}/api/orders/${billNo}/complete`, { method: 'PUT' });
-      if (res.ok) {
-        const detail = await fetchWithAuth(`${API_BASE}/api/orders/${billNo}`);
-        if (detail.ok) setSelectedOrder(await detail.json());
-        fetchData();
-      }
-    } catch (err) {
-      console.warn('Network error marking order complete, queueing offline:', err);
-      queueOfflineRequest(`/api/orders/${billNo}/complete`, 'PUT', {});
-      updateDashboardCacheStatus(billNo, 'Delivered');
-    } finally { setIsCompleting(false); }
-  };
-
-  const handleReady = async (billNo) => {
-    setIsReadying(true);
-    // Optimistic local state update for offline responsiveness
-    setOrders(prev => prev.map(o => o.bill_number === billNo ? { ...o, status: 'Ready' } : o));
-    
-    if (!isOnline()) {
-      queueOfflineRequest(`/api/orders/${billNo}/ready`, 'PUT', {});
-      updateDashboardCacheStatus(billNo, 'Ready');
-      setIsReadying(false);
-      return;
-    }
-
-    try {
-      const res = await fetchWithAuth(`${API_BASE}/api/orders/${billNo}/ready`, { method: 'PUT' });
-      if (res.ok) {
-        const detail = await fetchWithAuth(`${API_BASE}/api/orders/${billNo}`);
-        if (detail.ok) setSelectedOrder(await detail.json());
-        fetchData();
-      }
-    } catch (err) {
-      console.warn('Network error marking order ready, queueing offline:', err);
-      queueOfflineRequest(`/api/orders/${billNo}/ready`, 'PUT', {});
-      updateDashboardCacheStatus(billNo, 'Ready');
-    } finally { setIsReadying(false); }
   };
 
   return (
@@ -688,9 +638,19 @@ export default function Dashboard({ refreshTrigger }) {
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto relative">
+          {/* Background refetching indicator */}
+          {isOrdersFetching && !isLoading && (
+            <div className="absolute top-0 right-0 p-2 z-10">
+              <div className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          )}
+          
           {isLoading ? (
-            <div className="py-16 text-center text-sm text-gray-400">Loading orders…</div>
+            <div className="py-16 text-center">
+              <div className="inline-block w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin mb-2"></div>
+              <p className="text-sm text-gray-500">Loading orders...</p>
+            </div>
           ) : orders.length === 0 ? (
             <div className="py-16 text-center text-sm text-gray-400">No orders found.</div>
           ) : (
@@ -709,7 +669,7 @@ export default function Dashboard({ refreshTrigger }) {
               </thead>
               <tbody>
                 {orders.map((order) => (
-                  <tr key={order.bill_number} onClick={() => openOrder(order.bill_number)}>
+                  <tr key={order.bill_number} className="group cursor-pointer hover:bg-gray-50" onClick={() => openOrder(order.bill_number)}>
                     <td><span className="font-mono text-xs font-bold text-gray-500">ON{String(order.id).padStart(6, '0')}</span></td>
                     <td>{renderBillNumber(order.bill_number)}</td>
                     <td><span className="font-medium text-gray-900">{order.customer_name}</span></td>

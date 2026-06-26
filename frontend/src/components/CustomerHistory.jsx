@@ -2,7 +2,7 @@ import { fetchWithAuth } from '../App';
 import React, { useState, useEffect } from 'react';
 import { Search, Phone, Calendar, Eye, X, ChevronRight, Users, ArrowUpDown, Printer } from 'lucide-react';
 import { renderBillNumber } from './OrderForm';
-import { fetchWithCache } from '../utils/syncManager';
+import { useCustomers, useCustomerHistory } from '../hooks/useShopData';
 
 const API_BASE = ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '' && !window.Capacitor)
   ? `http://${window.location.hostname}:5000`
@@ -530,34 +530,25 @@ const handlePrintInvoice = (selectedOrder) => {
 export default function CustomerHistory() {
   const [searchQuery, setSearchQuery]       = useState('');
   const [sortBy, setSortBy]                 = useState('newest');
-  const [customers, setCustomers]           = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [orders, setOrders]                 = useState([]);
-  const [isLoadingList, setIsLoadingList]   = useState(false);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [selectedOrder, setSelectedOrder]   = useState(null);
 
-  const fetchCustomers = async () => {
-    setIsLoadingList(true);
-    try {
-      const data = await fetchWithCache(`${API_BASE}/api/customers?q=${searchQuery}`, searchQuery ? `customers_search_${searchQuery}` : 'customers_list', { customers: [] });
-      let list = [...(data.customers || [])];
-      if (sortBy === 'newest')         list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-      else if (sortBy === 'oldest')    list.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-      else if (sortBy === 'highest')   list.sort((a, b) => b.order_count - a.order_count);
-      else if (sortBy === 'lowest')    list.sort((a, b) => a.order_count - b.order_count);
-      setCustomers(list);
-      if (list.length > 0 && !selectedCustomer) setSelectedCustomer(list[0]);
-    } catch (e) { console.error(e); } finally { setIsLoadingList(false); }
-  };
+  const { data: customersData, isLoading: isLoadingList, isFetching: isFetchingList } = useCustomers(searchQuery);
+  const { data: historyData, isLoading: isLoadingHistory, isFetching: isFetchingHistory } = useCustomerHistory(selectedCustomer?.mobile_number);
 
-  const fetchHistory = async (mobile) => {
-    setIsLoadingHistory(true);
-    try {
-      const data = await fetchWithCache(`${API_BASE}/api/customers/${mobile}/history`, `customer_history_${mobile}`, { orders: [] });
-      setOrders(data.orders || []);
-    } catch (e) { setOrders([]); } finally { setIsLoadingHistory(false); }
-  };
+  let customers = [...(customersData?.customers || [])];
+  if (sortBy === 'newest')         customers.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  else if (sortBy === 'oldest')    customers.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  else if (sortBy === 'highest')   customers.sort((a, b) => b.order_count - a.order_count);
+  else if (sortBy === 'lowest')    customers.sort((a, b) => a.order_count - b.order_count);
+
+  const orders = historyData?.orders || [];
+
+  useEffect(() => {
+    if (customers.length > 0 && !selectedCustomer && !searchQuery) {
+      setSelectedCustomer(customers[0]);
+    }
+  }, [customers, selectedCustomer, searchQuery]);
 
   const openOrder = async (billNo) => {
     // Find locally first
@@ -574,15 +565,6 @@ export default function CustomerHistory() {
       if (res.ok) setSelectedOrder(await res.json());
     } catch (e) { console.error(e); }
   };
-
-  useEffect(() => {
-    const t = setTimeout(fetchCustomers, 300);
-    return () => clearTimeout(t);
-  }, [searchQuery, sortBy]);
-
-  useEffect(() => {
-    selectedCustomer ? fetchHistory(selectedCustomer.mobile_number) : setOrders([]);
-  }, [selectedCustomer]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-[calc(100vh-100px)]">
@@ -622,7 +604,12 @@ export default function CustomerHistory() {
         </div>
 
         {/* List */}
-        <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
+        <div className="flex-1 overflow-y-auto divide-y divide-gray-50 relative">
+          {isFetchingList && !isLoadingList && (
+            <div className="absolute top-2 right-2 p-1 z-10">
+              <div className="w-3 h-3 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          )}
           {isLoadingList ? (
             <div className="py-10 text-center text-xs text-gray-400">Loading…</div>
           ) : customers.length === 0 ? (
@@ -672,7 +659,12 @@ export default function CustomerHistory() {
             </div>
 
             {/* Orders table */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto relative">
+              {isFetchingHistory && !isLoadingHistory && (
+                <div className="absolute top-2 right-2 p-1 z-10">
+                  <div className="w-3 h-3 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              )}
               {isLoadingHistory ? (
                 <div className="py-12 text-center text-sm text-gray-400">Loading order history…</div>
               ) : orders.length === 0 ? (

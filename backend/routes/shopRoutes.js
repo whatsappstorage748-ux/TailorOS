@@ -29,7 +29,8 @@ import {
   getClothConfigs,
   saveClothConfig
 } from '../controllers/analyticsController.js';
-import { getWhatsAppStatus, logoutWhatsAppDevice } from '../controllers/whatsappController.js';
+import { pullServerChanges } from '../controllers/syncController.js';
+import { getWhatsAppStatus, logoutWhatsAppDevice, verifyWhatsAppStatus, sendWhatsAppTest } from '../controllers/whatsappController.js';
 
 const router = express.Router();
 
@@ -72,5 +73,10 @@ router.post('/cloth-configs', saveClothConfig);
 // WhatsApp Web Integration routes
 router.get('/whatsapp/status', getWhatsAppStatus);
 router.post('/whatsapp/logout', logoutWhatsAppDevice);
+router.get('/whatsapp/verify', verifyWhatsAppStatus);
+router.post('/whatsapp/test', sendWhatsAppTest);
+
+// Offline Sync Routes
+router.get('/sync/pull', pullServerChanges);
 
 export default router;

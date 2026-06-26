@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Dashboard from './components/Dashboard';
 import OrderForm from './components/OrderForm';
 import CustomerHistory from './components/CustomerHistory';
@@ -37,10 +38,20 @@ export const fetchWithAuth = async (url, options = {}) => {
   return response;
 };
 
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      refetchOnWindowFocus: true,
+      networkMode: 'offlineFirst',
+    },
+  },
+});
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('tailor_token'));
   const [activeTab, setActiveTab] = useState('create');
+  const [visitedTabs, setVisitedTabs] = useState(['create']);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [user, setUser] = useState(null);
   
@@ -59,26 +70,27 @@ export default function App() {
   useEffect(() => {
     const handleOnline = () => {
       setOnline(true);
-      syncPendingData(() => {
-        setRefreshTrigger(prev => prev + 1);
-      });
+      syncPendingData();
     };
     const handleOffline = () => {
       setOnline(false);
     };
+    const handleSyncComplete = () => {
+      queryClient.invalidateQueries();
+    };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    window.addEventListener('offline-sync-complete', handleSyncComplete);
 
     if (isOnline()) {
-      syncPendingData(() => {
-        setRefreshTrigger(prev => prev + 1);
-      });
+      syncPendingData();
     }
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('offline-sync-complete', handleSyncComplete);
     };
   }, []);
 
@@ -87,6 +99,13 @@ export default function App() {
       loadUserProfile();
     }
   }, [token]);
+
+  // Keep track of which tabs have been visited to keep them mounted
+  useEffect(() => {
+    if (!visitedTabs.includes(activeTab)) {
+      setVisitedTabs(prev => [...prev, activeTab]);
+    }
+  }, [activeTab, visitedTabs]);
 
   const loadUserProfile = async () => {
     try {
@@ -164,9 +183,17 @@ export default function App() {
   const trialDays = getTrialDaysRemaining();
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50 font-sans overflow-hidden">
-      
-      {/* Sticky Trial Banner */}
+    <QueryClientProvider client={queryClient}>
+      <div className="flex flex-col h-screen bg-gray-50 font-sans overflow-hidden">
+        
+        {/* Offline Banner */}
+        {!online && (
+          <div className="bg-rose-500 text-white text-xs font-semibold py-2 px-4 text-center flex items-center justify-center gap-2 z-50">
+            <span>⚠️ You are currently offline. TailorOS is running in Offline Mode. Some features may be unavailable.</span>
+          </div>
+        )}
+
+        {/* Sticky Trial Banner */}
       {user && user.subscription_status === 'TRIAL' && (
         <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-semibold py-2.5 px-4 text-center flex items-center justify-center gap-2 z-50 shadow-md">
           <span>⚠️ Your shop is on a 14-Day Free Trial. {trialDays} {trialDays === 1 ? 'day' : 'days'} remaining.</span>
@@ -267,11 +294,21 @@ export default function App() {
       {/* ── MAIN CONTENT ────────────────────────────────────────── */}
       <main className="flex-1 overflow-y-auto pb-16 sm:pb-0">
         <div className="max-w-7xl mx-auto px-3 py-4 sm:px-5 sm:py-6">
-          {activeTab === 'create'    && <OrderForm    onOrderCreated={handleOrderCreated} />}
-          {activeTab === 'dashboard' && <Dashboard    refreshTrigger={refreshTrigger} />}
-          {activeTab === 'history'   && <CustomerHistory />}
-          {activeTab === 'analytics' && <Analytics />}
-          {activeTab === 'profile'   && <Profile />}
+          <div className={activeTab === 'create' ? '' : 'hidden'}>
+            {visitedTabs.includes('create') && <OrderForm onOrderCreated={handleOrderCreated} />}
+          </div>
+          <div className={activeTab === 'dashboard' ? '' : 'hidden'}>
+            {visitedTabs.includes('dashboard') && <Dashboard refreshTrigger={refreshTrigger} />}
+          </div>
+          <div className={activeTab === 'history' ? '' : 'hidden'}>
+            {visitedTabs.includes('history') && <CustomerHistory />}
+          </div>
+          <div className={activeTab === 'analytics' ? '' : 'hidden'}>
+            {visitedTabs.includes('analytics') && <Analytics />}
+          </div>
+          <div className={activeTab === 'profile' ? '' : 'hidden'}>
+            {visitedTabs.includes('profile') && <Profile />}
+          </div>
         </div>
       </main>
 
@@ -300,5 +337,6 @@ export default function App() {
       </nav>
 
     </div>
+    </QueryClientProvider>
   );
 }

@@ -117,15 +117,25 @@ const logWhatsAppStatus = (type, mobile, status, details = {}) => {
 // Only initializes if USE_MOCK_GATEWAY is explicitly set to false.
 // ------------------------------------------------------------------------------------
 let client = null;
-let whatsappStatus = 'DISCONNECTED'; // 'DISCONNECTED', 'QR', 'CONNECTED'
+let whatsappStatus = 'DISCONNECTED'; // 'DISCONNECTED', 'QR', 'CONNECTED', 'VERIFIED', 'FAILED'
 let latestQrImage = null; // Base64 data URL
 let connectionError = null;
+
+// Connection Metadata
+let connectedSince = null;
+let lastVerifiedTime = null;
+let pushname = null;
+let wid = null;
 
 export const getWhatsAppState = () => {
     return {
         status: whatsappStatus,
         qr: latestQrImage,
-        error: connectionError
+        error: connectionError,
+        connectedSince,
+        lastVerifiedTime,
+        pushname,
+        wid
     };
 };
 
@@ -149,6 +159,10 @@ export const logoutWhatsApp = async () => {
             } catch (destErr) {}
             whatsappStatus = 'DISCONNECTED';
             latestQrImage = null;
+            connectedSince = null;
+            lastVerifiedTime = null;
+            pushname = null;
+            wid = null;
             initializeClient();
             return { success: true };
         }
@@ -159,7 +173,7 @@ export const logoutWhatsApp = async () => {
 const initializeClient = () => {
     if (USE_MOCK_GATEWAY) {
         console.log('WhatsApp Client is running in MOCK mode. Outgoing notifications will write to whatsapp_status.log instead of browser automation.');
-        whatsappStatus = 'CONNECTED';
+        whatsappStatus = 'VERIFIED';
         return;
     }
 
@@ -224,9 +238,15 @@ const initializeClient = () => {
 
     client.on('ready', () => {
         console.log('WhatsApp Client is ready!');
-        whatsappStatus = 'CONNECTED';
+        whatsappStatus = 'VERIFIED';
         latestQrImage = null;
         connectionError = null;
+        connectedSince = new Date().toISOString();
+        lastVerifiedTime = new Date().toISOString();
+        if (client.info) {
+            pushname = client.info.pushname;
+            wid = client.info.wid ? client.info.wid._serialized : null;
+        }
     });
 
     client.on('authenticated', () => {
@@ -248,6 +268,10 @@ const initializeClient = () => {
         whatsappStatus = 'DISCONNECTED';
         latestQrImage = null;
         connectionError = reason || 'Logged out';
+        connectedSince = null;
+        lastVerifiedTime = null;
+        pushname = null;
+        wid = null;
         
         try {
             await client.destroy();
@@ -260,6 +284,45 @@ const initializeClient = () => {
         whatsappStatus = 'DISCONNECTED';
         connectionError = err.message || 'Initialization failed';
     });
+};
+
+export const verifyWhatsAppConnection = async (forceCheck = false) => {
+    if (USE_MOCK_GATEWAY) {
+        whatsappStatus = 'VERIFIED';
+        return { success: true, status: 'VERIFIED' };
+    }
+
+    if (!client || whatsappStatus === 'DISCONNECTED' || whatsappStatus === 'QR') {
+        return { success: false, status: whatsappStatus };
+    }
+
+    try {
+        const state = await client.getState();
+        if (state === 'CONNECTED') {
+            whatsappStatus = 'VERIFIED';
+            lastVerifiedTime = new Date().toISOString();
+            if (client.info) {
+                pushname = client.info.pushname;
+                wid = client.info.wid ? client.info.wid._serialized : null;
+            }
+            return { success: true, status: 'VERIFIED' };
+        } else {
+            throw new Error(`Client state is ${state}`);
+        }
+    } catch (err) {
+        console.warn('WhatsApp verification failed, attempting silent reconnect:', err.message);
+        whatsappStatus = 'FAILED';
+        connectionError = err.message;
+        
+        // Try silent reconnect once
+        try {
+            await client.initialize();
+            return { success: false, status: 'FAILED', message: 'Reconnecting...' };
+        } catch (reconnectErr) {
+            whatsappStatus = 'DISCONNECTED';
+            return { success: false, status: 'DISCONNECTED', error: reconnectErr.message };
+        }
+    }
 };
 
 initializeClient();
@@ -302,6 +365,12 @@ export const sendWhatsAppMessage = async (to, body, metadata = {}) => {
         if (!client) {
             throw new Error('WhatsApp Client is not initialized.');
         }
+        
+        await verifyWhatsAppConnection();
+        if (whatsappStatus !== 'VERIFIED') {
+            throw new Error(`WhatsApp is not verified. Current status: ${whatsappStatus}`);
+        }
+
         console.log(`Sending WhatsApp message to ${chatId}...`);
         await client.sendMessage(chatId, body);
         console.log(`WhatsApp message successfully sent to ${chatId}`);
@@ -356,6 +425,12 @@ export const sendWhatsAppPDF = async (to, pdfBuffer, filename, caption = '', met
         if (!client) {
             throw new Error('WhatsApp Client is not initialized.');
         }
+        
+        await verifyWhatsAppConnection();
+        if (whatsappStatus !== 'VERIFIED') {
+            throw new Error(`WhatsApp is not verified. Current status: ${whatsappStatus}`);
+        }
+
         console.log(`Sending WhatsApp PDF bill to ${chatId}...`);
         const base64Data = pdfBuffer.toString('base64');
         const media = new MessageMedia('application/pdf', base64Data, filename);

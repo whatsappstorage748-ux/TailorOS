@@ -25,15 +25,20 @@ export default function Profile() {
   const [cardCVV, setCardCVV] = useState('123');
 
   // WhatsApp connection state
-  const [whatsappStatus, setWhatsappStatus] = useState('DISCONNECTED'); // DISCONNECTED, QR, CONNECTED
+  const [whatsappStatus, setWhatsappStatus] = useState('DISCONNECTED'); // DISCONNECTED, QR, CONNECTED, VERIFIED, FAILED
   const [whatsappQr, setWhatsappQr] = useState(null);
   const [whatsappError, setWhatsappError] = useState(null);
   const [whatsappLoading, setWhatsappLoading] = useState(true);
+  
+  // Test message state
+  const [testMobile, setTestMobile] = useState('');
+  const [testStatus, setTestStatus] = useState(null);
+  const [testSending, setTestSending] = useState(false);
 
   const checkWhatsAppStatus = async (showLoading = false) => {
     if (showLoading) setWhatsappLoading(true);
     try {
-      const res = await fetchWithAuth(`${API_BASE}/api/whatsapp/status`);
+      const res = await fetchWithAuth(`${API_BASE}/api/whatsapp/verify`);
       if (res.ok) {
         const data = await res.json();
         setWhatsappStatus(data.status);
@@ -44,6 +49,32 @@ export default function Profile() {
       console.error('Failed to fetch WhatsApp status:', err);
     } finally {
       setWhatsappLoading(false);
+    }
+  };
+
+  const handleTestMessage = async (e) => {
+    e.preventDefault();
+    if (!testMobile) return;
+    setTestSending(true);
+    setTestStatus(null);
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/api/whatsapp/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mobile: testMobile })
+      });
+      if (res.ok) {
+        setTestStatus({ success: true, message: 'Test message sent successfully!' });
+        setTestMobile('');
+      } else {
+        const data = await res.json();
+        setTestStatus({ success: false, message: data.message || 'Failed to send' });
+      }
+    } catch (err) {
+      setTestStatus({ success: false, message: 'Network error while sending test' });
+    } finally {
+      setTestSending(false);
+      setTimeout(() => setTestStatus(null), 4000);
     }
   };
 
@@ -70,10 +101,10 @@ export default function Profile() {
     loadProfile();
     checkWhatsAppStatus(true);
     
-    // Poll every 5 seconds to update the QR code or detect connection
+    // Poll every 60 seconds while the Profile component is mounted
     const interval = setInterval(() => {
       checkWhatsAppStatus(false);
-    }, 5000);
+    }, 60000);
     
     return () => clearInterval(interval);
   }, []);
@@ -336,23 +367,85 @@ export default function Profile() {
                 <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
                 <p className="text-xs text-gray-500">Checking WhatsApp service status...</p>
               </div>
-            ) : whatsappStatus === 'CONNECTED' ? (
-              <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-5 flex flex-col sm:flex-row items-center sm:items-start gap-4">
-                <div className="p-3 bg-emerald-100 rounded-full text-emerald-600">
-                  <Check className="w-6 h-6 stroke-[3px]" />
+            ) : (whatsappStatus === 'CONNECTED' || whatsappStatus === 'VERIFIED') ? (
+              <div className="space-y-4">
+                <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-5 flex flex-col sm:flex-row items-center sm:items-start gap-4">
+                  <div className="p-3 bg-emerald-100 rounded-full text-emerald-600">
+                    <Check className="w-6 h-6 stroke-[3px]" />
+                  </div>
+                  <div className="flex-1 text-center sm:text-left space-y-1.5">
+                    <h3 className="font-bold text-emerald-900 text-sm">
+                      WhatsApp {whatsappStatus === 'VERIFIED' ? 'Verified & Operational' : 'Connected'}
+                    </h3>
+                    <p className="text-xs text-emerald-700 leading-relaxed">
+                      Your shop's WhatsApp account is connected. Automatic invoice PDFs and delivery notifications will be sent directly to your customers' numbers.
+                    </p>
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={handleWhatsAppLogout}
+                        className="bg-red-50 hover:bg-red-100 text-red-600 font-semibold text-xs px-4 py-2 rounded-xl border border-red-200 transition-all active:scale-95"
+                      >
+                        Link New WhatsApp (Disconnect Current)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
+                {whatsappStatus === 'VERIFIED' && (
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                    <h4 className="text-sm font-semibold text-gray-800 mb-2">Test Connection</h4>
+                    <form onSubmit={handleTestMessage} className="flex flex-col sm:flex-row gap-2">
+                      <input 
+                        type="text" 
+                        placeholder="Enter mobile number" 
+                        value={testMobile}
+                        onChange={(e) => setTestMobile(e.target.value)}
+                        className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-brand-500" 
+                        required
+                        style={{ color: '#000000', backgroundColor: '#ffffff' }}
+                      />
+                      <button 
+                        type="submit" 
+                        disabled={testSending}
+                        className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-semibold active:scale-95 disabled:opacity-50 flex items-center justify-center min-w-[120px]"
+                      >
+                        {testSending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Send Test Message'}
+                      </button>
+                    </form>
+                    {testStatus && (
+                      <p className={`mt-2 text-xs font-semibold ${testStatus.success ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {testStatus.message}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : whatsappStatus === 'FAILED' ? (
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-5 flex flex-col sm:flex-row items-center sm:items-start gap-4">
+                <div className="p-3 bg-red-100 rounded-full text-red-600">
+                  <AlertTriangle className="w-6 h-6 stroke-[3px]" />
                 </div>
                 <div className="flex-1 text-center sm:text-left space-y-1.5">
-                  <h3 className="font-bold text-emerald-900 text-sm">WhatsApp Linked Successfully</h3>
-                  <p className="text-xs text-emerald-700 leading-relaxed">
-                    Your shop's WhatsApp account is connected. Automatic invoice PDFs and delivery notifications will be sent directly to your customers' numbers.
+                  <h3 className="font-bold text-red-900 text-sm">Connection Lost / Sending Failed</h3>
+                  <p className="text-xs text-red-700 leading-relaxed">
+                    We lost connection to your WhatsApp device or a recent message failed to send. Please check your phone's internet connection.
                   </p>
-                  <div className="pt-2">
+                  <p className="text-xs font-semibold text-red-800">Error: {whatsappError || 'Unknown'}</p>
+                  <div className="pt-2 flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => checkWhatsAppStatus(true)}
+                      className="bg-white text-red-600 font-semibold text-xs px-4 py-2 rounded-xl border border-red-200 transition-all hover:bg-red-50"
+                    >
+                      Retry Connection
+                    </button>
                     <button
                       type="button"
                       onClick={handleWhatsAppLogout}
-                      className="bg-red-50 hover:bg-red-100 text-red-600 font-semibold text-xs px-4 py-2 rounded-xl border border-red-200 transition-all active:scale-95"
+                      className="bg-red-600 text-white font-semibold text-xs px-4 py-2 rounded-xl transition-all hover:bg-red-700"
                     >
-                      Disconnect WhatsApp Device
+                      Reset & Re-link
                     </button>
                   </div>
                 </div>

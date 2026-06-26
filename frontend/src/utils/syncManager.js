@@ -1,90 +1,59 @@
 import { fetchWithAuth, API_BASE } from '../App';
+import { db } from '../db';
 
-// Check if browser is online
 export const isOnline = () => {
   return typeof navigator !== 'undefined' && navigator.onLine;
 };
 
-// Generic fetch with caching for GET endpoints
-export const fetchWithCache = async (url, cacheKey, fallbackValue = null) => {
-  const cacheName = `tailor_cache_${cacheKey}`;
-
-  if (isOnline()) {
-    try {
-      const response = await fetchWithAuth(url);
-      if (response.ok) {
-        const data = await response.json();
-        localStorage.setItem(cacheName, JSON.stringify(data));
-        return data;
-      }
-    } catch (err) {
-      console.warn(`Fetch to ${url} failed, falling back to local cache:`, err);
-    }
-  }
-
-  // Offline fallback
-  const cachedData = localStorage.getItem(cacheName);
-  if (cachedData !== null) {
-    try {
-      return JSON.parse(cachedData);
-    } catch (e) {
-      console.error('Error parsing cached data:', e);
-    }
-  }
-
-  return fallbackValue;
-};
-
-// Generic request queuing for offline operations
-export const queueOfflineRequest = (endpoint, method, body, extra = {}) => {
-  const queue = JSON.parse(localStorage.getItem('tailor_sync_queue') || '[]');
-  queue.push({
-    endpoint,
-    method,
-    body,
-    ...extra
-  });
-  localStorage.setItem('tailor_sync_queue', JSON.stringify(queue));
-};
-
-// Store order creation payload offline in a sync queue
-export const queueOfflineOrder = (orderData) => {
-  // Generate a temporary offline bill number and ID
-  const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const tempBillNo = `OFFLINE-${new Date().toISOString().slice(2,10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
-
-  const offlineOrder = {
-    ...orderData,
-    id: tempId,
-    bill_number: tempBillNo,
-    order_date: new Date().toISOString(),
-    status: 'Undelivered',
-    isOfflinePending: true
-  };
-
-  // Add to the sync queue
-  queueOfflineRequest('/api/orders', 'POST', orderData, { tempId });
-
-  // Save the temporary order to local cache so it appears immediately on Dashboard
-  const cachedOrdersName = 'tailor_cache_dashboard_orders';
-  const cachedOrders = JSON.parse(localStorage.getItem(cachedOrdersName) || '{"orders":[]}');
-  
-  // Append temporary order to cached orders
-  cachedOrders.orders = [offlineOrder, ...(cachedOrders.orders || [])];
-  localStorage.setItem(cachedOrdersName, JSON.stringify(cachedOrders));
-
-  return offlineOrder;
-};
-
-// Synchronize all pending offline requests to the Railway cloud
-export const syncPendingData = async (onSyncSuccess) => {
+// Pulls changes from server that happened since the last sync time
+export const pullServerChanges = async () => {
   if (!isOnline()) return;
 
-  const queue = JSON.parse(localStorage.getItem('tailor_sync_queue') || '[]');
-  if (queue.length === 0) return;
+  try {
+    const meta = await db.sync_metadata.get('sync_state');
+    const lastSync = meta ? meta.last_sync_time : '1970-01-01T00:00:00.000Z';
+    
+    // Request server for all records updated after lastSync
+    const response = await fetchWithAuth(`${API_BASE}/api/sync/pull?since=${lastSync}`);
+    
+    if (response.ok) {
+      const data = await response.json();
+      
+      // Upsert data to Dexie
+      if (data.orders?.length) await db.orders.bulkPut(data.orders);
+      if (data.customers?.length) await db.customers.bulkPut(data.customers);
+      if (data.employees?.length) await db.employees.bulkPut(data.employees);
+      if (data.expenses?.length) await db.expenses.bulkPut(data.expenses);
+      if (data.custom_expenses?.length) await db.custom_expenses.bulkPut(data.custom_expenses);
+      if (data.cloth_configs?.length) await db.cloth_configs.bulkPut(data.cloth_configs);
+      
+      // Update sync time
+      await db.sync_metadata.put({ id: 'sync_state', last_sync_time: data.server_time });
+      console.log('Successfully pulled updates from server.');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('offline-sync-complete'));
+      }
+    }
+  } catch (error) {
+    console.error('Error pulling server changes:', error);
+  }
+};
+
+// Pushes local mutations to server
+export const syncPendingData = async () => {
+  if (!isOnline()) return;
+
+  const queue = await db.sync_queue.orderBy('id').toArray();
+  
+  if (queue.length === 0) {
+    // If nothing to push, try pulling
+    await pullServerChanges();
+    return;
+  }
 
   console.log(`Starting background sync for ${queue.length} pending offline mutations...`);
-  const failedItems = [];
+  
+  let successCount = 0;
 
   for (const item of queue) {
     try {
@@ -95,37 +64,51 @@ export const syncPendingData = async (onSyncSuccess) => {
       });
 
       if (response.ok) {
-        const serverData = await response.json();
-        console.log(`Successfully synced offline request: ${item.method} ${item.endpoint}`);
-        
-        // Custom post-sync updates for specific endpoints
-        if (item.method === 'POST' && item.endpoint === '/api/orders') {
-          // Remove from the dashboard cache list of temporary orders
-          const cachedOrdersName = 'tailor_cache_dashboard_orders';
-          const cachedOrders = JSON.parse(localStorage.getItem(cachedOrdersName) || '{"orders":[]}');
-          if (cachedOrders.orders) {
-            cachedOrders.orders = cachedOrders.orders.filter(o => o.id !== item.tempId);
-            // Add the newly created real server order if not already in list
-            if (serverData.order) {
-              cachedOrders.orders = [serverData.order, ...cachedOrders.orders];
-            }
-            localStorage.setItem(cachedOrdersName, JSON.stringify(cachedOrders));
-          }
-
-          if (onSyncSuccess) {
-            onSyncSuccess(item.tempId, serverData);
-          }
+        // Handled successfully on backend
+        if (item.action === 'CREATE_ORDER') {
+          // Delete our temporary local order, because pullServerChanges will fetch the real one.
+          await db.orders.where('bill_number').equals(item.temp_bill_number).delete();
         }
+        
+        await db.sync_queue.delete(item.id);
+        successCount++;
       } else {
-        // Keep in queue for next retry if server error is temporary
-        failedItems.push(item);
+        console.warn(`Sync failed for ${item.action} with status: ${response.status}`);
+        // For 4xx errors (like validation), we delete the queue item so it doesn't block forever.
+        // For 5xx errors, we break and retry later.
+        if (response.status < 500) {
+           await db.sync_queue.delete(item.id);
+        } else {
+           break;
+        }
       }
     } catch (err) {
-      console.error('Error syncing item:', err);
-      failedItems.push(item);
+      console.error('Network error syncing item:', err);
+      break;
     }
   }
 
-  // Update queue with only items that failed to sync
-  localStorage.setItem('tailor_sync_queue', JSON.stringify(failedItems));
+  if (successCount > 0) {
+    console.log(`Successfully synced ${successCount} offline items.`);
+  }
+
+  // Always pull after pushing to ensure we have the latest server state
+  await pullServerChanges();
+};
+
+// Start background sync interval
+if (typeof window !== 'undefined') {
+  // Sync every 30 seconds
+  setInterval(syncPendingData, 30000);
+  // Sync when coming back online
+  window.addEventListener('online', syncPendingData);
+}
+
+// Backwards compatibility for components that might still use this directly
+export const queueOfflineOrder = (orderData) => {
+  console.warn("queueOfflineOrder is deprecated. Use useCreateOrder from useShopData instead.");
+};
+export const fetchWithCache = async (url, key, fallback) => {
+  console.warn("fetchWithCache is deprecated.");
+  return fallback; 
 };
