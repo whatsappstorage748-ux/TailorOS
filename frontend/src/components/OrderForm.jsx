@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Canvas from './Canvas';
-import { Plus, Trash2, CheckCircle2, User, Phone, Scissors, AlertCircle, CheckCircle, Printer, Edit3, ClipboardList as ClipboardListIcon } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, User, Phone, Scissors, AlertCircle, CheckCircle, Printer, Edit3, ClipboardList as ClipboardListIcon, Lock, Unlock } from 'lucide-react';
 import { isOnline } from '../utils/syncManager';
 import { useCreateOrder } from '../hooks/useShopData';
 import { db } from '../db';
@@ -269,6 +269,9 @@ export default function OrderForm({ onOrderCreated }) {
   const [detectedLatestBillSeries, setDetectedLatestBillSeries] = useState('');
   const [useLatestBillSeries, setUseLatestBillSeries] = useState(false);
   const [showMeasurementPopup, setShowMeasurementPopup] = useState(false);
+  // Slider confirmation for edit unlock
+  const [editSliderValue, setEditSliderValue] = useState(0);
+  const [isEditUnlocked, setIsEditUnlocked] = useState(false);
 
   const { mutateAsync: createOrder, isPending: isSubmitting } = useCreateOrder();
   const defaultClothTypes = ['Shirt', 'Pant', 'Suit', 'Safari', 'Kurta', 'Pyjama', 'Sherwani', 'Waistcoat', 'Coat'];
@@ -314,11 +317,15 @@ export default function OrderForm({ onOrderCreated }) {
           setCustomerName(cust.customer_name);
           setIsExistingCustomer(true);
           
-          // Try to fetch latest order for measurement image and series
-          const latestOrder = await db.orders.where('mobile_number').equals(mobileNumber).reverse().first();
+          // Load latest order measurement image and bill series
+          const allOrders = await db.orders.where('mobile_number').equals(mobileNumber).toArray();
+          allOrders.sort((a, b) => new Date(b.order_date) - new Date(a.order_date));
+          const latestOrder = allOrders[0];
           if (latestOrder) {
              setInitialImage(latestOrder.measurement_image_path ? `${API_BASE}/${latestOrder.measurement_image_path}` : null);
-             setCanvasReadOnly(true); 
+             setCanvasReadOnly(true);
+             setEditSliderValue(0);
+             setIsEditUnlocked(false);
              if (latestOrder.bill_number) {
                 setDetectedLatestBillSeries(latestOrder.bill_number);
                 setShowBillSeriesPopup(true);
@@ -330,6 +337,8 @@ export default function OrderForm({ onOrderCreated }) {
           setOriginalCanvasData(null);
           setCanvasReadOnly(false);
           setUseLatestBillSeries(false);
+          setEditSliderValue(0);
+          setIsEditUnlocked(false);
         }
       } catch (e) { console.error(e); } finally { setIsCheckingCustomer(false); }
     }, 500);
@@ -407,6 +416,8 @@ export default function OrderForm({ onOrderCreated }) {
       setCanvasReadOnly(false);
       setUseLatestBillSeries(false);
       setAdvancePaid(0);
+      setEditSliderValue(0);
+      setIsEditUnlocked(false);
 
       const shirt = clothConfigs.find(c => c.cloth_type.toLowerCase() === 'shirt');
       const pant  = clothConfigs.find(c => c.cloth_type.toLowerCase() === 'pant');
@@ -442,28 +453,96 @@ export default function OrderForm({ onOrderCreated }) {
           <span className="section-label ml-auto hidden sm:block">Draw or write measurements below</span>
         </div>
         
+        {/* Mobile fallback */}
         <div className="sm:hidden p-8 text-center bg-gray-50 flex flex-col items-center justify-center">
           <p className="text-sm text-gray-500 font-medium">Measurement sheet is available only in tablet/laptop.</p>
           <p className="text-xs text-gray-400 mt-2">You can view saved measurements in Customer History.</p>
         </div>
 
-        <div className="hidden sm:block bg-gray-100 p-4 sm:p-6">
-          <div className="w-full max-w-3xl mx-auto bg-white shadow-sm border border-gray-300 aspect-[4/3] relative">
+        {/* Desktop canvas */}
+        <div className="hidden sm:block bg-gray-50 border-b border-gray-100">
+          <div className="w-full" style={{ height: '420px' }}>
             <Canvas onChange={handleCanvasChange} initialImage={initialImage} readOnly={canvasReadOnly} />
-            {canvasReadOnly && (
-              <div className="absolute inset-0 bg-gray-900/10 backdrop-blur-[2px] flex items-center justify-center z-20 pointer-events-auto">
-                <button
-                  type="button"
-                  onClick={() => setCanvasReadOnly(false)}
-                  className="btn-primary bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs py-2.5 px-5 flex items-center gap-2 shadow-lg"
-                >
-                  <Edit3 className="w-4 h-4" />
-                  Edit Measurements
-                </button>
-              </div>
-            )}
           </div>
         </div>
+
+        {/* Edit confirmation banner — shown when a returning customer's sheet is loaded */}
+        {canvasReadOnly && (
+          <div className="hidden sm:flex items-center justify-between gap-4 px-5 py-3 bg-amber-50 border-t border-amber-200">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 rounded-full bg-amber-100">
+                <Lock className="w-3.5 h-3.5 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-amber-800">Previous measurement sheet loaded</p>
+                <p className="text-xs text-amber-600 mt-0.5">Slide to unlock editing — this will overwrite the saved sheet</p>
+              </div>
+            </div>
+
+            {/* Slider confirm */}
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <div className="relative w-48 h-9 bg-amber-100 border border-amber-300 rounded-full overflow-hidden flex items-center">
+                {/* Track label */}
+                <span className={`absolute inset-0 flex items-center justify-center text-xs font-semibold pointer-events-none transition-opacity duration-200 ${
+                  isEditUnlocked ? 'opacity-0' : 'text-amber-700 opacity-100'
+                }`}>
+                  {isEditUnlocked ? '' : '← Slide to edit'}
+                </span>
+                <span className={`absolute inset-0 flex items-center justify-center text-xs font-semibold pointer-events-none transition-opacity duration-200 ${
+                  isEditUnlocked ? 'text-emerald-700 opacity-100' : 'opacity-0'
+                }`}>
+                  ✓ Editing unlocked
+                </span>
+                <input
+                  type="range"
+                  min="0" max="100"
+                  value={editSliderValue}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    setEditSliderValue(val);
+                    if (val >= 90) {
+                      setIsEditUnlocked(true);
+                      setCanvasReadOnly(false);
+                    }
+                  }}
+                  className="absolute inset-0 w-full opacity-0 cursor-pointer h-full"
+                  style={{ zIndex: 10 }}
+                />
+                {/* Thumb visual */}
+                <div
+                  className={`absolute left-1 top-1 bottom-1 rounded-full transition-all duration-150 flex items-center justify-center shadow-md ${
+                    isEditUnlocked
+                      ? 'bg-emerald-500 w-7'
+                      : 'bg-white border border-amber-300 w-7'
+                  }`}
+                  style={{ left: `calc(${Math.min(editSliderValue, 90)}% * 0.85 + 4px)` }}
+                >
+                  {isEditUnlocked
+                    ? <Unlock className="w-3 h-3 text-white" />
+                    : <Lock className="w-3 h-3 text-amber-400" />
+                  }
+                </div>
+              </div>
+
+              {/* Cancel button if unlocked */}
+              {isEditUnlocked && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCanvasReadOnly(true);
+                    setEditSliderValue(0);
+                    setIsEditUnlocked(false);
+                    // Restore original image
+                    if (originalCanvasData) setCanvasData(originalCanvasData);
+                  }}
+                  className="text-xs text-gray-500 hover:text-red-500 underline whitespace-nowrap transition-colors"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

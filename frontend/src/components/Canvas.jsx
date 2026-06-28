@@ -285,7 +285,7 @@ export default function Canvas({ onChange, initialImage, readOnly = false }) {
   } : {};
 
   return (
-    <div className={`flex flex-col h-full bg-white border border-gray-200 rounded-lg overflow-hidden ${readOnly ? 'select-none pointer-events-none' : ''}`}>
+    <div className="flex flex-col h-full bg-white border border-gray-200 rounded-lg overflow-hidden">
       {/* Canvas Toolbar — flat, minimal, professional */}
       <div className="flex flex-wrap items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200 gap-2">
         <div className="flex items-center gap-2 text-gray-600">
