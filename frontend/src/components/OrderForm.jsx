@@ -741,7 +741,7 @@ export default function OrderForm({ onOrderCreated }) {
 
       {showBillSeriesPopup && (
         <div className="modal-overlay">
-          <div className="modal-panel max-w-sm text-center">
+          <div className="modal-panel max-w-sm text-center p-6 sm:p-8">
             <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center mx-auto mb-4">
               <ClipboardListIcon className="w-6 h-6 text-indigo-600" />
             </div>
@@ -772,7 +772,7 @@ export default function OrderForm({ onOrderCreated }) {
 
       {showMeasurementPopup && (
         <div className="modal-overlay z-[200]">
-          <div className="modal-panel max-w-sm text-center">
+          <div className="modal-panel max-w-sm text-center p-6 sm:p-8">
             <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
               <AlertCircle className="w-6 h-6 text-amber-600" />
             </div>

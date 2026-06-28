@@ -33,14 +33,19 @@ export const pullServerChanges = async () => {
       // Update sync time
       await db.sync_metadata.put({ id: 'sync_state', last_sync_time: data.server_time });
       
-      // Notify React Query to re-read from Dexie
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new Event('offline-sync-complete'));
-      }
+      const totalUpdates = (data.orders?.length || 0) + 
+                           (data.customers?.length || 0) + 
+                           (data.employees?.length || 0) + 
+                           (data.expenses?.length || 0) + 
+                           (data.custom_expenses?.length || 0) + 
+                           (data.cloth_configs?.length || 0);
 
-      const totalUpdates = (data.orders?.length || 0) + (data.customers?.length || 0);
       if (totalUpdates > 0) {
         console.log(`[Sync] Pulled ${totalUpdates} record(s) from server.`);
+        // Notify React Query to re-read from Dexie ONLY if new data arrived
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('offline-sync-complete'));
+        }
       }
     }
   } catch (error) {
