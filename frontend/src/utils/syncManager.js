@@ -5,7 +5,10 @@ export const isOnline = () => {
   return typeof navigator !== 'undefined' && navigator.onLine;
 };
 
-// Pulls changes from server that happened since the last sync time
+/**
+ * Pulls changes from server that happened since the last sync time.
+ * This runs in the background — it does NOT block the UI render.
+ */
 export const pullServerChanges = async () => {
   if (!isOnline()) return;
 
@@ -20,38 +23,47 @@ export const pullServerChanges = async () => {
       const data = await response.json();
       
       // Upsert data to Dexie
-      if (data.orders?.length) await db.orders.bulkPut(data.orders);
-      if (data.customers?.length) await db.customers.bulkPut(data.customers);
-      if (data.employees?.length) await db.employees.bulkPut(data.employees);
-      if (data.expenses?.length) await db.expenses.bulkPut(data.expenses);
+      if (data.orders?.length)         await db.orders.bulkPut(data.orders);
+      if (data.customers?.length)       await db.customers.bulkPut(data.customers);
+      if (data.employees?.length)       await db.employees.bulkPut(data.employees);
+      if (data.expenses?.length)        await db.expenses.bulkPut(data.expenses);
       if (data.custom_expenses?.length) await db.custom_expenses.bulkPut(data.custom_expenses);
-      if (data.cloth_configs?.length) await db.cloth_configs.bulkPut(data.cloth_configs);
+      if (data.cloth_configs?.length)   await db.cloth_configs.bulkPut(data.cloth_configs);
       
       // Update sync time
       await db.sync_metadata.put({ id: 'sync_state', last_sync_time: data.server_time });
-      console.log('Successfully pulled updates from server.');
+      
+      // Notify React Query to re-read from Dexie
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('offline-sync-complete'));
       }
+
+      const totalUpdates = (data.orders?.length || 0) + (data.customers?.length || 0);
+      if (totalUpdates > 0) {
+        console.log(`[Sync] Pulled ${totalUpdates} record(s) from server.`);
+      }
     }
   } catch (error) {
-    console.error('Error pulling server changes:', error);
+    console.error('[Sync] Error pulling server changes:', error);
   }
 };
 
-// Pushes local mutations to server
+/**
+ * Pushes local mutations to server, then pulls latest changes.
+ * Safe to call from anywhere — always checks online status first.
+ */
 export const syncPendingData = async () => {
   if (!isOnline()) return;
 
   const queue = await db.sync_queue.orderBy('id').toArray();
   
   if (queue.length === 0) {
-    // If nothing to push, try pulling
+    // Nothing to push — just pull any server-side updates
     await pullServerChanges();
     return;
   }
 
-  console.log(`Starting background sync for ${queue.length} pending offline mutations...`);
+  console.log(`[Sync] Flushing ${queue.length} pending offline mutation(s)...`);
   
   let successCount = 0;
 
@@ -64,18 +76,16 @@ export const syncPendingData = async () => {
       });
 
       if (response.ok) {
-        // Handled successfully on backend
         if (item.action === 'CREATE_ORDER') {
-          // Delete our temporary local order, because pullServerChanges will fetch the real one.
+          // Delete temp offline order — pullServerChanges will fetch the real one
           await db.orders.where('bill_number').equals(item.temp_bill_number).delete();
         }
-        
         await db.sync_queue.delete(item.id);
         successCount++;
       } else {
-        console.warn(`Sync failed for ${item.action} with status: ${response.status}`);
-        // For 4xx errors (like validation), we delete the queue item so it doesn't block forever.
-        // For 5xx errors, we break and retry later.
+        console.warn(`[Sync] Failed: ${item.action} → HTTP ${response.status}`);
+        // 4xx = bad request (validation error etc.) — discard so it doesn't block queue
+        // 5xx = server error — stop and retry on next interval
         if (response.status < 500) {
            await db.sync_queue.delete(item.id);
         } else {
@@ -83,28 +93,45 @@ export const syncPendingData = async () => {
         }
       }
     } catch (err) {
-      console.error('Network error syncing item:', err);
+      console.error('[Sync] Network error:', err);
       break;
     }
   }
 
   if (successCount > 0) {
-    console.log(`Successfully synced ${successCount} offline items.`);
+    console.log(`[Sync] Pushed ${successCount} mutation(s) successfully.`);
   }
 
-  // Always pull after pushing to ensure we have the latest server state
+  // Always pull after pushing to get fresh server state
   await pullServerChanges();
 };
 
-// Start background sync interval
+/**
+ * NON-BLOCKING initial sync on app startup.
+ * Fires immediately but does NOT delay the first render.
+ * Uses setTimeout(0) to yield the main thread first so the UI renders.
+ */
+export const initSync = () => {
+  if (typeof window === 'undefined') return;
+
+  // Yield to browser so React can render first, then sync in background
+  setTimeout(() => {
+    syncPendingData().catch(err => console.error('[Sync] Init sync error:', err));
+  }, 0);
+};
+
+// Background sync interval — every 60 seconds (was 30s, halved server load)
 if (typeof window !== 'undefined') {
-  // Sync every 30 seconds
-  setInterval(syncPendingData, 30000);
-  // Sync when coming back online
-  window.addEventListener('online', syncPendingData);
+  setInterval(syncPendingData, 60000);
+
+  // Sync immediately when coming back online
+  window.addEventListener('online', () => {
+    console.log('[Sync] Back online — syncing now...');
+    syncPendingData();
+  });
 }
 
-// Backwards compatibility for components that might still use this directly
+// Backwards compatibility
 export const queueOfflineOrder = (orderData) => {
   console.warn("queueOfflineOrder is deprecated. Use useCreateOrder from useShopData instead.");
 };

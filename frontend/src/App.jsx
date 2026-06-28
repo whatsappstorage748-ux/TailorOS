@@ -9,7 +9,7 @@ import LandingPage from './components/LandingPage';
 import AdminPanel from './components/AdminPanel';
 import Profile from './components/Profile';
 import { Scissors, LayoutDashboard, UserSearch, ClipboardList, BarChart2, LogOut, Menu, User, Shield, CreditCard } from 'lucide-react';
-import { isOnline, syncPendingData } from './utils/syncManager';
+import { isOnline, syncPendingData, initSync } from './utils/syncManager';
 
 const NAV_ITEMS = [
   { id: 'create',    label: 'New Order',       icon: ClipboardList },
@@ -84,9 +84,8 @@ export default function App() {
     window.addEventListener('offline', handleOffline);
     window.addEventListener('offline-sync-complete', handleSyncComplete);
 
-    if (isOnline()) {
-      syncPendingData();
-    }
+    // Non-blocking: React renders first, then sync happens in background
+    initSync();
 
     return () => {
       window.removeEventListener('online', handleOnline);

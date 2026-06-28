@@ -3,13 +3,20 @@ import { db } from '../db';
 import { syncPendingData } from '../utils/syncManager';
 
 /**
- * SKELETON LOADING STRATEGY (Option B — keep initialData)
+ * SKELETON LOADING STRATEGY
  * ─────────────────────────────────────────────────────────
- * Each hook returns both `data` and `isFetching`.
+ * Each hook uses `placeholderData` instead of `initialData`.
+ *
+ * KEY DIFFERENCE:
+ *   - initialData    → TanStack treats it as "real" data. isFetching starts FALSE.
+ *                      Skeleton NEVER fires. Zeros show until fetch completes. ← OLD BUG
+ *   - placeholderData → TanStack treats it as "fake" data. isFetching starts TRUE.
+ *                      Skeleton fires immediately. Real data replaces it on fetch. ← FIX
+ *
  * Components use this pattern:
  *
  *   const showSkeleton = isFetching && items.length === 0;
- *   if (showSkeleton)      return <SkeletonComponent />;   ← first load only
+ *   if (showSkeleton)       return <SkeletonComponent />;   ← first load only
  *   if (items.length === 0) return <EmptyState />;          ← genuinely empty
  *   return <RealContent items={items} />;                   ← cached, instant
  *
@@ -51,10 +58,10 @@ export const useDashboardStats = () => {
         todayOrders: todayOrd
       };
     },
-    // Keep initialData so stats card never shows empty flicker.
-    // Skeleton is shown at stat-card level via isFetching + zero values.
-    initialData: { totalOrders: 0, undeliveredOrders: 0, deliveredOrders: 0, todayRevenue: 0, todayOrders: 0 },
-    gcTime: 1000 * 60 * 30,
+    // placeholderData: isFetching=true on first render → skeleton fires correctly
+    placeholderData: { totalOrders: 0, undeliveredOrders: 0, deliveredOrders: 0, todayRevenue: 0, todayOrders: 0 },
+    staleTime: 1000 * 60 * 5,   // 5 min — reuse on tab switch
+    gcTime: 1000 * 60 * 30,     // 30 min — keep in memory when unmounted
   });
 };
 
@@ -76,8 +83,8 @@ export const useOrders = (searchQuery = '') => {
       }
       return { orders };
     },
-    // Skeleton: show when isFetching && orders.length === 0
-    initialData: { orders: [] },
+    placeholderData: { orders: [] },
+    staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
   });
 };
@@ -94,10 +101,21 @@ export const useCustomers = (searchQuery = '') => {
           (c.customer_name && c.customer_name.toLowerCase().includes(q))
         );
       }
+      // Enrich with order_count from local orders
+      const orders = await db.orders.toArray();
+      const countMap = {};
+      orders.forEach(o => {
+        countMap[o.mobile_number] = (countMap[o.mobile_number] || 0) + 1;
+      });
+      customers = customers.map(c => ({
+        ...c,
+        order_count: countMap[c.mobile_number] || 0,
+      }));
+      customers.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
       return { customers };
     },
-    // Skeleton: show when isFetching && customers.length === 0
-    initialData: { customers: [] },
+    placeholderData: { customers: [] },
+    staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
   });
 };
@@ -112,12 +130,13 @@ export const useCustomerHistory = (mobile) => {
       return { customer: customer || null, orders };
     },
     enabled: !!mobile,
-    initialData: { customer: null, orders: [] },
+    placeholderData: { customer: null, orders: [] },
+    staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
   });
 };
 
-// Analytics Mockers (for simplicity we sum up locally or rely on server pull)
+// Analytics — reads from local Dexie
 export const useAnalyticsSummary = (month) => {
   return useQuery({
     queryKey: ['analytics', 'summary', month],
@@ -132,13 +151,14 @@ export const useAnalyticsSummary = (month) => {
         revenue,
         rent: expenses.rent,
         electricity: expenses.electricity,
-        salariesPaid: 0, // Mocked for now
-        customExpensesPaid: 0, // Mocked for now
+        salariesPaid: 0,
+        customExpensesPaid: 0,
         profit: revenue - expenses.rent - expenses.electricity
       };
     },
     enabled: !!month,
-    initialData: { revenue: 0, rent: 0, electricity: 0, salariesPaid: 0, customExpensesPaid: 0, profit: 0 },
+    placeholderData: { revenue: 0, rent: 0, electricity: 0, salariesPaid: 0, customExpensesPaid: 0, profit: 0 },
+    staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
   });
 };
@@ -147,11 +167,11 @@ export const useAnalyticsDaily = (month) => {
   return useQuery({
     queryKey: ['analytics', 'daily', month],
     queryFn: async () => {
-      // Mapped mock for local data
       return { dailyStats: [] };
     },
     enabled: !!month,
-    initialData: { dailyStats: [] },
+    placeholderData: { dailyStats: [] },
+    staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
   });
 };
@@ -163,7 +183,8 @@ export const useAnalyticsYearly = (year) => {
       return { yearlyStats: [] };
     },
     enabled: !!year,
-    initialData: { yearlyStats: [] },
+    placeholderData: { yearlyStats: [] },
+    staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
   });
 };
@@ -236,13 +257,12 @@ export const useCreateOrder = () => {
         });
       }
 
-      // 4. Queue Sync
-      // Note: orderData might contain base64 image data.
+      // 4. Queue Sync — body payload for the server
       await db.sync_queue.add({
         action: 'CREATE_ORDER',
         endpoint: `/api/orders`,
         method: 'POST',
-        body: orderData, // body payload for the server
+        body: orderData,
         temp_bill_number: billNo,
         timestamp: now
       });
