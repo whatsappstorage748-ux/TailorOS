@@ -10,68 +10,55 @@ const { Client, LocalAuth, MessageMedia } = pkg;
  * WHATSAPP MESSAGING GATEWAY & INTEGRATION SERVICE
  * ====================================================================================
  * 
- * This file serves as the centralized entry point and gateway for all WhatsApp outgoing
- * notifications, including:
- *   1. New Invoice PDFs with pricing & item details (Type: 'INVOICE')
- *   2. Ready for Pickup status notifications (Type: 'STATUS_READY')
- *   3. Delivered & Completed status notifications (Type: 'STATUS_DELIVERED')
+ * This file is the SINGLE entry point for ALL outgoing WhatsApp notifications:
+ *   1. New Invoice PDFs with pricing & item details              (type: 'INVOICE')
+ *   2. Ready for Pickup status notifications                     (type: 'STATUS_READY')
+ *   3. Delivered & Completed status notifications                (type: 'STATUS_DELIVERED')
+ * 
+ * ====================================================================================
+ * ⚡ HOW TO SWAP TO OFFICIAL META WHATSAPP CLOUD API (3 steps)
+ * ====================================================================================
+ * 
+ * STEP 1 — THIS FILE (backend/services/whatsapp.js)
+ *   Find the two PLACEHOLDER blocks and replace them with your Cloud API fetch():
+ *     Block A inside sendWhatsAppMessage() — plain text messages
+ *     Block B inside sendWhatsAppPDF()     — PDF attachment messages
+ *   Target endpoint:
+ *     POST https://graph.facebook.com/v19.0/{PHONE_NUMBER_ID}/messages
+ *   You can safely DELETE the entire initializeClient() function and the puppeteer
+ *   client setup once you've replaced those two blocks.
+ * 
+ * STEP 2 — ROUTES (backend/routes/shopRoutes.js)
+ *   Remove the two temporary QR-session management routes:
+ *     router.get('/whatsapp/status', getWhatsAppStatus)
+ *     router.post('/whatsapp/logout', logoutWhatsAppDevice)
+ *   And remove the corresponding controller file: controllers/whatsappController.js
+ * 
+ * STEP 3 — FRONTEND (frontend/src/components/Profile.jsx)
+ *   Search for the comment  {/* WhatsApp Web Integration */}
+ *   and remove that entire card section. The rest of the app is unchanged.
+ * 
+ * DONE. Message formatting, metadata, and logging all stay the same.
+ * ====================================================================================
  * 
  * ------------------------------------------------------------------------------------
- * TEMPORARY WHATSAPP WEB FEATURE INTEGRATION TOUCHPOINTS (FOR EASY FUTURE REMOVAL):
+ * DATA PASSED TO THESE FUNCTIONS (stays the same regardless of API):
  * ------------------------------------------------------------------------------------
- * If you need to remove this temporary whatsapp-web.js client and replace it with the
- * official Meta Cloud API, refer to the following locations where code was added/modified:
- * 
- * 1. SERVICES GATEWAY (This File):
- *    - File: backend/services/whatsapp.js
- *    - Modifications:
- *      * Line 4: Added `import QRCode from 'qrcode';`
- *      * Line 66: Changed `USE_MOCK_GATEWAY = false` by default.
- *      * Lines 107-210: Created client initialization state tracking, event handlers,
- *        `getWhatsAppState()`, and `logoutWhatsApp()`.
- * 
- * 2. ENDPOINTS & ROUTING:
- *    - File: backend/controllers/whatsappController.js [NEW FILE]
- *      * Function `getWhatsAppStatus(req, res)`: Exposes current state.
- *      * Function `logoutWhatsAppDevice(req, res)`: Manually disconnects session.
- *    - File: backend/routes/shopRoutes.js
- *      * Line 34: Added imports for `getWhatsAppStatus` and `logoutWhatsAppDevice`.
- *      * Line 74: Registered `router.get('/whatsapp/status', getWhatsAppStatus);`
- *      * Line 75: Registered `router.post('/whatsapp/logout', logoutWhatsAppDevice);`
- * 
- * 3. FRONTEND UI:
- *    - File: frontend/src/components/Profile.jsx
- *      * Added `import { MessageSquare, RefreshCw } from 'lucide-react';`
- *      * Added states: `whatsappStatus`, `whatsappQr`, `whatsappError`, `whatsappLoading`, `pollingInterval`.
- *      * Created `checkWhatsAppStatus()` and `handleWhatsAppLogout()`.
- *      * Rendered "WhatsApp Web Integration" connection card in the profile page UI.
- * 
- * ------------------------------------------------------------------------------------
- * HOW INFORMATION LANDS HERE:
- * ------------------------------------------------------------------------------------
- * Whenever an order is created or updated in the backend (primarily inside the
- * `orderController.js`), a call is triggered to `sendWhatsAppPDF` or `sendWhatsAppMessage`.
- * 
- * The following rich metadata is passed to these functions:
- * 
- * 1. `to` (String): The recipient's mobile number.
- * 2. `pdfBuffer` (Buffer): The compiled binary invoice PDF.
- * 3. `filename` (String): The proposed invoice PDF file name (e.g. "ShopName_Bill_26-0001.pdf").
- * 4. `caption` / `body` (String): The pre-formatted text message body.
- * 5. `metadata` (Object): A rich payload containing:
+ * 1. `to` (String): Recipient mobile number.
+ * 2. `pdfBuffer` (Buffer): Compiled binary invoice PDF.
+ * 3. `filename` (String): Invoice filename e.g. "ShopName_Bill_26-0001.pdf".
+ * 4. `caption` / `body` (String): Pre-formatted text message body.
+ * 5. `metadata` (Object): Rich payload with:
  *    - `type` (String): 'INVOICE', 'STATUS_READY', or 'STATUS_DELIVERED'.
  *    - `customerName` (String): Customer's full name.
- *    - `order` (Object): The complete Prisma database record of the Order containing:
- *        * `id` (BigInt/Int): Unique 6-digit Order ID.
- *        * `bill_number` (String): E.g. "26-0001-2" (year-sequence-suffix).
- *        * `mobile_number` (String): Recipient mobile number.
- *        * `total_amount` (Decimal): Total price of order.
- *        * `advance_amount` (Decimal): Advance paid by customer.
- *        * `balance_amount` (Decimal): Outstanding balance.
+ *    - `order` (Object): Complete Prisma Order record with:
+ *        * `id` (BigInt): Unique 6-digit Order ID.
+ *        * `bill_number` (String): e.g. "26-0001-2" (year-sequence-suffix).
+ *        * `mobile_number` (String): Recipient phone.
+ *        * `total_amount` / `advance_amount` / `balance_amount` (Decimal).
  *        * `status` (String): 'Undelivered', 'Ready', or 'Delivered'.
- *        * `items` (Array): Detailed item configs with `cloth_type`, `quantity`, `price_per_cloth`.
- *        * `owner` (Object): Shop owner credentials & brand info (`shop_name`, `email`, `contact_number`).
- * 
+ *        * `items` (Array): Item configs (cloth_type, quantity, price_per_cloth).
+ *        * `owner` (Object): shop_name, email, contact_number.
  * ====================================================================================
  */
 

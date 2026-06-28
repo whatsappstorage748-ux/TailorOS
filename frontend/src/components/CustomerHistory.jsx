@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Phone, Calendar, Eye, X, ChevronRight, Users, ArrowUpDown, Printer } from 'lucide-react';
 import { renderBillNumber } from './OrderForm';
 import { useCustomers, useCustomerHistory } from '../hooks/useShopData';
+import { SkeletonCustomerCard, SkeletonTableRow } from './SkeletonLoaders';
 
 const API_BASE = ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '' && !window.Capacitor)
   ? `http://${window.location.hostname}:5000`
@@ -533,8 +534,8 @@ export default function CustomerHistory() {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [selectedOrder, setSelectedOrder]   = useState(null);
 
-  const { data: customersData, isLoading: isLoadingList, isFetching: isFetchingList } = useCustomers(searchQuery);
-  const { data: historyData, isLoading: isLoadingHistory, isFetching: isFetchingHistory } = useCustomerHistory(selectedCustomer?.mobile_number);
+  const { data: customersData, isFetching: isFetchingList } = useCustomers(searchQuery);
+  const { data: historyData, isFetching: isFetchingHistory } = useCustomerHistory(selectedCustomer?.mobile_number);
 
   let customers = [...(customersData?.customers || [])];
   if (sortBy === 'newest')         customers.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -543,6 +544,13 @@ export default function CustomerHistory() {
   else if (sortBy === 'lowest')    customers.sort((a, b) => a.order_count - b.order_count);
 
   const orders = historyData?.orders || [];
+
+  // Skeleton: only first-load (fetching + no data yet)
+  const showCustomerSkeleton = isFetchingList && customers.length === 0;
+  const showHistorySkeleton  = isFetchingHistory && orders.length === 0 && !!selectedCustomer;
+  // Background sync indicator
+  const isBgFetchingList    = isFetchingList && customers.length > 0;
+  const isBgFetchingHistory = isFetchingHistory && orders.length > 0;
 
   useEffect(() => {
     if (customers.length > 0 && !selectedCustomer && !searchQuery) {
@@ -605,13 +613,17 @@ export default function CustomerHistory() {
 
         {/* List */}
         <div className="flex-1 overflow-y-auto divide-y divide-gray-50 relative">
-          {isFetchingList && !isLoadingList && (
+          {/* Background sync spinner */}
+          {isBgFetchingList && (
             <div className="absolute top-2 right-2 p-1 z-10">
-              <div className="w-3 h-3 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-3 h-3 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
             </div>
           )}
-          {isLoadingList ? (
-            <div className="py-10 text-center text-xs text-gray-400">Loading…</div>
+          {/* First-load skeleton */}
+          {showCustomerSkeleton ? (
+            <div className="p-3 flex flex-col gap-2">
+              {Array.from({ length: 6 }).map((_, i) => <SkeletonCustomerCard key={i} />)}
+            </div>
           ) : customers.length === 0 ? (
             <div className="py-10 text-center text-xs text-gray-400">No customers found.</div>
           ) : customers.map((c) => (
@@ -660,13 +672,28 @@ export default function CustomerHistory() {
 
             {/* Orders table */}
             <div className="flex-1 overflow-y-auto relative">
-              {isFetchingHistory && !isLoadingHistory && (
+              {/* Background sync spinner */}
+              {isBgFetchingHistory && (
                 <div className="absolute top-2 right-2 p-1 z-10">
-                  <div className="w-3 h-3 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+                  <div className="w-3 h-3 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
                 </div>
               )}
-              {isLoadingHistory ? (
-                <div className="py-12 text-center text-sm text-gray-400">Loading order history…</div>
+              {/* First-load skeleton */}
+              {showHistorySkeleton ? (
+                <div className="overflow-x-auto">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Order ID</th><th>Bill No.</th><th>Order Date</th>
+                        <th className="text-right">Amount</th><th>Advance</th>
+                        <th>Balance</th><th className="text-center">Status</th><th className="text-center">View</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from({ length: 5 }).map((_, i) => <SkeletonTableRow key={i} cols={8} />)}
+                    </tbody>
+                  </table>
+                </div>
               ) : orders.length === 0 ? (
                 <div className="py-12 text-center text-sm text-gray-400">No orders recorded for this customer.</div>
               ) : (

@@ -5,6 +5,7 @@ import { renderBillNumber } from './OrderForm';
 import { isOnline } from '../utils/syncManager';
 import { useDashboardStats, useOrders, useUpdateOrderStatus } from '../hooks/useShopData';
 import { useQueryClient } from '@tanstack/react-query';
+import { SkeletonDashboard, SkeletonTableRow } from './SkeletonLoaders';
 
 const API_BASE = ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '' && !window.Capacitor)
   ? `http://${window.location.hostname}:5000`
@@ -22,6 +23,11 @@ const fmtDt = (dateStr) => {
 };
 
 const handlePrintInvoice = (selectedOrder) => {
+  const printWindow = window.open('', '_blank', 'width=900,height=800'); // ← FIX: was missing this line
+  if (!printWindow) {
+    alert('Pop-up blocked! Please allow pop-ups for this site to view the invoice.');
+    return;
+  }
   const { order, customer, items } = selectedOrder;
   const owner = order.owner || {};
   const shopName = owner.shop_name || 'Captain Tailors';
@@ -556,13 +562,21 @@ export default function Dashboard({ refreshTrigger }) {
   const [selectedOrder, setSelectedOrder] = useState(null);
 
   // TanStack Query Hooks
-  const { data: statsData, isLoading: isStatsLoading } = useDashboardStats();
-  const { data: ordersData, isLoading: isOrdersLoading, isFetching: isOrdersFetching } = useOrders(searchQuery);
+  const { data: statsData, isFetching: isStatsFetching } = useDashboardStats();
+  const { data: ordersData, isFetching: isOrdersFetching } = useOrders(searchQuery);
   const { mutate: updateStatus, isPending: isUpdatingStatus } = useUpdateOrderStatus();
 
   const stats = statsData || { totalOrders: 0, undeliveredOrders: 0, deliveredOrders: 0, todayRevenue: 0, todayOrders: 0 };
   const orders = ordersData?.orders || [];
-  const isLoading = isStatsLoading || isOrdersLoading;
+
+  // Skeleton: only show on true first-load (fetching + no data yet)
+  const showSkeleton = isStatsFetching && orders.length === 0;
+  // Background re-fetch indicator (has data but updating)
+  const isBgFetching = isOrdersFetching && orders.length > 0;
+
+  // Status action pending aliases
+  const isReadying  = isUpdatingStatus;
+  const isCompleting = isUpdatingStatus;
 
   useEffect(() => {
     // If App.jsx triggers a global refresh (e.g., from syncManager)
@@ -605,6 +619,13 @@ export default function Dashboard({ refreshTrigger }) {
   return (
     <div className="flex flex-col gap-5">
 
+      {/* ── FIRST-LOAD SKELETON ───────────────────────────── */}
+      {showSkeleton && <SkeletonDashboard />}
+
+      {/* ── CONTENT (hidden while skeleton shows) ─────────── */}
+      {!showSkeleton && (
+        <>
+
       {/* ── KPI STATS ROW ─────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <StatCard icon={Package}      label="Total Orders"    value={stats.totalOrders}      iconBg="bg-gray-100"     iconColor="text-gray-600" />
@@ -640,18 +661,13 @@ export default function Dashboard({ refreshTrigger }) {
         {/* Table */}
         <div className="overflow-x-auto relative">
           {/* Background refetching indicator */}
-          {isOrdersFetching && !isLoading && (
-            <div className="absolute top-0 right-0 p-2 z-10">
-              <div className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+          {isBgFetching && (
+            <div className="absolute top-0 right-0 p-2 z-10" title="Syncing...">
+              <div className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
             </div>
           )}
           
-          {isLoading ? (
-            <div className="py-16 text-center">
-              <div className="inline-block w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin mb-2"></div>
-              <p className="text-sm text-gray-500">Loading orders...</p>
-            </div>
-          ) : orders.length === 0 ? (
+          {orders.length === 0 ? (
             <div className="py-16 text-center text-sm text-gray-400">No orders found.</div>
           ) : (
             <table className="data-table">
@@ -857,6 +873,8 @@ export default function Dashboard({ refreshTrigger }) {
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );

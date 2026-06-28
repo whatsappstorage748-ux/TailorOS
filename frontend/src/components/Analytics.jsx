@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useAnalyticsSummary, useAnalyticsDaily, useAnalyticsYearly } from '../hooks/useShopData';
 import { useQueryClient } from '@tanstack/react-query';
+import { SkeletonAnalytics } from './SkeletonLoaders';
 
 export default function Analytics() {
   const API_BASE = ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '' && !window.Capacitor)
@@ -21,9 +22,13 @@ export default function Analytics() {
   const [yearsList, setYearsList] = useState([]);
 
   // TanStack Queries
-  const { data: monthlySummaryData, isLoading: isLoadingMonthlySummary, isFetching: isFetchingMonthly } = useAnalyticsSummary(viewMode === 'monthly' ? selectedMonth : null);
-  const { data: dailyStatsData, isLoading: isLoadingDailyStats, isFetching: isFetchingDaily } = useAnalyticsDaily(viewMode === 'monthly' ? selectedMonth : null);
-  const { data: yearlyStatsData, isLoading: isLoadingYearlyStats, isFetching: isFetchingYearly } = useAnalyticsYearly(viewMode === 'yearly' ? selectedYear : null);
+  const { data: monthlySummaryData, isFetching: isFetchingMonthly } = useAnalyticsSummary(viewMode === 'monthly' ? selectedMonth : null);
+  const { data: dailyStatsData, isFetching: isFetchingDaily } = useAnalyticsDaily(viewMode === 'monthly' ? selectedMonth : null);
+  const { data: yearlyStatsData, isFetching: isFetchingYearly } = useAnalyticsYearly(viewMode === 'yearly' ? selectedYear : null);
+
+  // Skeleton: show on first load when fetching and month is selected but data is zero
+  const isFetchingActive = viewMode === 'monthly' ? isFetchingMonthly : isFetchingYearly;
+  const showSkeleton = isFetchingActive && !selectedMonth && !selectedYear;
 
   const dailyStats = dailyStatsData?.dailyStats || [];
   const yearlyStats = yearlyStatsData?.yearlyStats || [];
@@ -489,6 +494,11 @@ export default function Analytics() {
 
   return (
     <div className="flex flex-col gap-5 pb-8">
+      {/* First-load skeleton — shows only before month list is initialized */}
+      {showSkeleton && <SkeletonAnalytics />}
+
+      {!showSkeleton && (
+      <>
       {/* 1. TOP BAR */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -893,7 +903,7 @@ export default function Analytics() {
               </div>
             </div>
             <div className="p-6 bg-white">
-              {isLoadingDaily ? (
+              {isFetchingDaily ? (
                 <div className="py-20 text-center text-sm text-gray-400">Generating chart...</div>
               ) : (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
@@ -903,6 +913,9 @@ export default function Analytics() {
             </div>
           </div>
         </div>
+      )}
+
+      </>
       )}
 
     </div>

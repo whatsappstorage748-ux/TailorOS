@@ -2,6 +2,24 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '../db';
 import { syncPendingData } from '../utils/syncManager';
 
+/**
+ * SKELETON LOADING STRATEGY (Option B — keep initialData)
+ * ─────────────────────────────────────────────────────────
+ * Each hook returns both `data` and `isFetching`.
+ * Components use this pattern:
+ *
+ *   const showSkeleton = isFetching && items.length === 0;
+ *   if (showSkeleton)      return <SkeletonComponent />;   ← first load only
+ *   if (items.length === 0) return <EmptyState />;          ← genuinely empty
+ *   return <RealContent items={items} />;                   ← cached, instant
+ *
+ * This means:
+ *   - Tab first visit  : isFetching=true  + length=0  → skeleton (< 200ms)
+ *   - Tab revisit      : isFetching=false + length>0  → instant (cache hit)
+ *   - Background sync  : isFetching=true  + length>0  → real data + corner spinner
+ *   - Shop has no data : isFetching=false + length=0  → empty state
+ */
+
 // --- QUERIES ---
 
 export const useDashboardStats = () => {
@@ -33,7 +51,10 @@ export const useDashboardStats = () => {
         todayOrders: todayOrd
       };
     },
-    initialData: { totalOrders: 0, undeliveredOrders: 0, deliveredOrders: 0, todayRevenue: 0, todayOrders: 0 }
+    // Keep initialData so stats card never shows empty flicker.
+    // Skeleton is shown at stat-card level via isFetching + zero values.
+    initialData: { totalOrders: 0, undeliveredOrders: 0, deliveredOrders: 0, todayRevenue: 0, todayOrders: 0 },
+    gcTime: 1000 * 60 * 30,
   });
 };
 
@@ -55,7 +76,9 @@ export const useOrders = (searchQuery = '') => {
       }
       return { orders };
     },
-    initialData: { orders: [] }
+    // Skeleton: show when isFetching && orders.length === 0
+    initialData: { orders: [] },
+    gcTime: 1000 * 60 * 30,
   });
 };
 
@@ -73,7 +96,9 @@ export const useCustomers = (searchQuery = '') => {
       }
       return { customers };
     },
-    initialData: { customers: [] }
+    // Skeleton: show when isFetching && customers.length === 0
+    initialData: { customers: [] },
+    gcTime: 1000 * 60 * 30,
   });
 };
 
@@ -87,7 +112,8 @@ export const useCustomerHistory = (mobile) => {
       return { customer: customer || null, orders };
     },
     enabled: !!mobile,
-    initialData: { customer: null, orders: [] }
+    initialData: { customer: null, orders: [] },
+    gcTime: 1000 * 60 * 30,
   });
 };
 
@@ -112,7 +138,8 @@ export const useAnalyticsSummary = (month) => {
       };
     },
     enabled: !!month,
-    initialData: { revenue: 0, rent: 0, electricity: 0, salariesPaid: 0, customExpensesPaid: 0, profit: 0 }
+    initialData: { revenue: 0, rent: 0, electricity: 0, salariesPaid: 0, customExpensesPaid: 0, profit: 0 },
+    gcTime: 1000 * 60 * 30,
   });
 };
 
@@ -124,7 +151,8 @@ export const useAnalyticsDaily = (month) => {
       return { dailyStats: [] };
     },
     enabled: !!month,
-    initialData: { dailyStats: [] }
+    initialData: { dailyStats: [] },
+    gcTime: 1000 * 60 * 30,
   });
 };
 
@@ -135,7 +163,8 @@ export const useAnalyticsYearly = (year) => {
       return { yearlyStats: [] };
     },
     enabled: !!year,
-    initialData: { yearlyStats: [] }
+    initialData: { yearlyStats: [] },
+    gcTime: 1000 * 60 * 30,
   });
 };
 

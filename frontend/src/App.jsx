@@ -41,8 +41,9 @@ export const fetchWithAuth = async (url, options = {}) => {
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      refetchOnWindowFocus: true,
+      staleTime: 1000 * 60 * 15,   // 15 min — cached data reused on tab switches
+      gcTime: 1000 * 60 * 30,       // 30 min — keeps data in memory even when tab unmounts
+      refetchOnWindowFocus: false,   // don't refetch just because the user switched browser tabs
       networkMode: 'offlineFirst',
     },
   },
