@@ -11,6 +11,8 @@ export const isOnline = () => {
  */
 export const pullServerChanges = async () => {
   if (!isOnline()) return;
+  const token = localStorage.getItem('tailor_token');
+  if (!token) return; // Do not pull if not logged in
 
   try {
     const meta = await db.sync_metadata.get('sync_state');
@@ -59,6 +61,8 @@ export const pullServerChanges = async () => {
  */
 export const syncPendingData = async () => {
   if (!isOnline()) return;
+  const token = localStorage.getItem('tailor_token');
+  if (!token) return; // Do not sync if not logged in
 
   const queue = await db.sync_queue.orderBy('id').toArray();
   

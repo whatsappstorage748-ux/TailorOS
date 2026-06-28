@@ -27,13 +27,17 @@ export const fetchWithAuth = async (url, options = {}) => {
   const token = localStorage.getItem('tailor_token');
   const headers = {
     ...options.headers,
-    'Authorization': `Bearer ${token}`
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
   };
   const response = await fetch(url, { ...options, headers });
   if (response.status === 401) {
+    const hadToken = !!localStorage.getItem('tailor_token');
     localStorage.removeItem('tailor_token');
     localStorage.removeItem('tailor_user');
-    window.location.href = '/';
+    // Prevent infinite redirect loop if we are already logged out on the landing page
+    if (hadToken || window.location.pathname !== '/') {
+      window.location.href = '/';
+    }
   }
   return response;
 };
