@@ -35,7 +35,7 @@ const { Client, LocalAuth, MessageMedia } = pkg;
  *   And remove the corresponding controller file: controllers/whatsappController.js
  * 
  * STEP 3 — FRONTEND (frontend/src/components/Profile.jsx)
- *   Search for the comment  {/* WhatsApp Web Integration */}
+ *   Search for the comment: "WhatsApp Web Integration"
  *   and remove that entire card section. The rest of the app is unchanged.
  * 
  * DONE. Message formatting, metadata, and logging all stay the same.
