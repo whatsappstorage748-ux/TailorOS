@@ -187,7 +187,37 @@ export const useAnalyticsDaily = (month) => {
   return useQuery({
     queryKey: ['analytics', 'daily', month],
     queryFn: async () => {
-      return { dailyStats: [] };
+      if (!month) return { dailyStats: [] };
+      const year = parseInt(month.split('-')[0], 10);
+      const mth = parseInt(month.split('-')[1], 10);
+      const daysInMonth = new Date(year, mth, 0).getDate();
+
+      const orders = await db.orders.toArray();
+      const expenses = await db.expenses.where('month').equals(month).first() || { rent: 0, electricity: 0 };
+      const dailyOverhead = (expenses.rent + expenses.electricity) / daysInMonth;
+
+      const dailyStats = [];
+      for (let day = 1; day <= daysInMonth; day++) {
+        let revenue = 0;
+        orders.forEach(o => {
+          const oDate = new Date(o.order_date);
+          const isCreatedToday = !isNaN(oDate.getTime()) && oDate.getFullYear() === year && (oDate.getMonth() + 1) === mth && oDate.getDate() === day;
+          
+          if (isCreatedToday) {
+            revenue += (o.status === 'Delivered' ? (parseFloat(o.total_amount) || 0) : (parseFloat(o.advance_amount) || 0));
+          }
+          
+          const uDate = new Date(o.updated_at || o.order_date);
+          const isUpdatedToday = !isNaN(uDate.getTime()) && uDate.getFullYear() === year && (uDate.getMonth() + 1) === mth && uDate.getDate() === day;
+          if (isUpdatedToday && o.status === 'Delivered' && !isCreatedToday) {
+            revenue += (parseFloat(o.balance_amount) || 0);
+          }
+        });
+
+        const profit = revenue - dailyOverhead;
+        dailyStats.push({ day, revenue, profit });
+      }
+      return { dailyStats };
     },
     enabled: !!month,
     placeholderData: { dailyStats: [] },
@@ -200,7 +230,37 @@ export const useAnalyticsYearly = (year) => {
   return useQuery({
     queryKey: ['analytics', 'yearly', year],
     queryFn: async () => {
-      return { yearlyStats: [] };
+      if (!year) return { yearlyStats: [] };
+      const orders = await db.orders.toArray();
+      const allExpenses = await db.expenses.toArray();
+      
+      const yearlyStats = [];
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+      for (let m = 0; m < 12; m++) {
+        const monthStr = `${year}-${String(m + 1).padStart(2, '0')}`;
+        const expenses = allExpenses.find(e => e.month === monthStr) || { rent: 0, electricity: 0 };
+        const expense = expenses.rent + expenses.electricity;
+
+        let revenue = 0;
+        orders.forEach(o => {
+          const oDate = new Date(o.order_date);
+          const isCreatedThisMonth = !isNaN(oDate.getTime()) && oDate.getFullYear() === parseInt(year) && oDate.getMonth() === m;
+          
+          if (isCreatedThisMonth) {
+            revenue += (o.status === 'Delivered' ? (parseFloat(o.total_amount) || 0) : (parseFloat(o.advance_amount) || 0));
+          }
+          
+          const uDate = new Date(o.updated_at || o.order_date);
+          const isUpdatedThisMonth = !isNaN(uDate.getTime()) && uDate.getFullYear() === parseInt(year) && uDate.getMonth() === m;
+          if (isUpdatedThisMonth && o.status === 'Delivered' && !isCreatedThisMonth) {
+            revenue += (parseFloat(o.balance_amount) || 0);
+          }
+        });
+
+        yearlyStats.push({ label: monthNames[m], revenue, expense, profit: revenue - expense });
+      }
+      return { yearlyStats };
     },
     enabled: !!year,
     placeholderData: { yearlyStats: [] },
