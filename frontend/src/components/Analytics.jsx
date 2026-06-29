@@ -346,6 +346,30 @@ export default function Analytics() {
 
   // Toggle paid status for employee salary
   const handleToggleSalary = async (employeeId) => {
+    // Optimistic UI Update
+    const previousEmployees = [...employees];
+    setEmployees(employees.map(emp => {
+      if (emp.employee_id === employeeId) {
+        let newStatus = 'Paid';
+        if (payrollMode === 'Weekly') {
+          let weeks = [];
+          if (emp.status === 'Paid') weeks = ['1','2','3','4'];
+          else if (emp.status?.startsWith('W:')) weeks = emp.status.substring(2).split(',').filter(Boolean);
+          const wStr = String(selectedWeek);
+          if (weeks.includes(wStr)) weeks = weeks.filter(w => w !== wStr);
+          else weeks.push(wStr);
+          weeks.sort();
+          if (weeks.length === 4) newStatus = 'Paid';
+          else if (weeks.length === 0) newStatus = 'Unpaid';
+          else newStatus = `W:${weeks.join(',')}`;
+        } else {
+          newStatus = emp.status === 'Paid' ? 'Unpaid' : 'Paid';
+        }
+        return { ...emp, status: newStatus };
+      }
+      return emp;
+    }));
+
     try {
       const payload = { employee_id: employeeId, month: selectedMonth };
       if (payrollMode === 'Weekly') {
@@ -357,11 +381,13 @@ export default function Analytics() {
         body: JSON.stringify(payload)
       });
       if (res.ok) {
-        fetchSalaries();
         queryClient.invalidateQueries({ queryKey: ['analytics'] });
+      } else {
+        setEmployees(previousEmployees);
       }
     } catch (error) {
       console.error('Error toggling salary:', error);
+      setEmployees(previousEmployees);
     }
   };
 

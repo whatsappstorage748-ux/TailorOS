@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '../db';
 import { syncPendingData } from '../utils/syncManager';
+import { API_BASE, fetchWithAuth } from '../App';
 
 /**
  * SKELETON LOADING STRATEGY
@@ -90,6 +91,18 @@ export const useOrders = (searchQuery = '') => {
     queryKey: ['orders', searchQuery],
     queryFn: async () => {
       let orders = await db.orders.toArray();
+      const customers = await db.customers.toArray();
+      const customerMap = {};
+      customers.forEach(c => {
+        if (c.mobile_number) customerMap[c.mobile_number] = c.customer_name;
+      });
+
+      // Enrich orders with customer_name if missing
+      orders = orders.map(o => ({
+        ...o,
+        customer_name: o.customer_name || customerMap[o.mobile_number] || 'Unknown Customer'
+      }));
+
       // Sort newest first
       orders.sort((a, b) => new Date(b.order_date) - new Date(a.order_date));
 
@@ -167,13 +180,31 @@ export const useAnalyticsSummary = (month) => {
       const monthOrders = orders.filter(o => o.order_date && o.order_date.startsWith(month));
       const revenue = monthOrders.reduce((sum, o) => sum + (o.advance_amount || 0) + (o.balance_amount || 0), 0);
       
+      let salariesPaid = 0;
+      try {
+        const res = await fetchWithAuth(`${API_BASE}/api/analytics/salaries?month=${month}`);
+        if (res.ok) {
+          const data = await res.json();
+          salariesPaid = data.employees.reduce((acc, emp) => {
+             if (emp.status === 'Paid') return acc + emp.amount;
+             if (emp.status.startsWith('W:')) {
+                const weeksCount = emp.status.substring(2).split(',').filter(Boolean).length;
+                return acc + (emp.amount * (weeksCount / 4));
+             }
+             return acc;
+          }, 0);
+        }
+      } catch (err) {
+        console.error('Error fetching salaries for analytics summary', err);
+      }
+      
       return {
         revenue,
         rent: expenses.rent,
         electricity: expenses.electricity,
-        salariesPaid: 0,
+        salariesPaid,
         customExpensesPaid: 0,
-        profit: revenue - expenses.rent - expenses.electricity
+        profit: revenue - expenses.rent - expenses.electricity - salariesPaid
       };
     },
     enabled: !!month,
