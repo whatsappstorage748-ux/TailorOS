@@ -461,7 +461,7 @@ export default function OrderForm({ onOrderCreated }) {
 
         {/* Desktop canvas */}
         <div className="hidden sm:block bg-gray-50 border-b border-gray-100 py-4">
-          <div className="w-full max-w-[500px] mx-auto" style={{ height: '420px' }}>
+          <div className="w-full max-w-[750px] mx-auto" style={{ height: '550px' }}>
             <Canvas onChange={handleCanvasChange} initialImage={initialImage} readOnly={canvasReadOnly} />
           </div>
         </div>
