@@ -1,0 +1,172 @@
+{
+  "project_name": "TailorOS (Tailor Shop Management SaaS)",
+  "description": "A comprehensive multi-tenant SaaS application built for tailoring shops to manage orders, customer measurements, financials, and offline-first synchronization.",
+  "architecture": {
+    "frontend": "React (Vite), TailwindCSS, TanStack Query, Dexie (IndexedDB), Lucide Icons",
+    "backend": "Node.js, Express, Prisma ORM, PostgreSQL (Supabase)",
+    "deployment": "Railway (Backend/Frontend combined), Vercel (optional)",
+    "offline_strategy": "Offline-first PWA approach. Dexie.js handles local storage. Background sync manager pushes queues and pulls server changes every 60s."
+  },
+  "database_schema": {
+    "User": "SaaS Tenant (Shop Owner). Contains shop details, subscription tier, JWT tokens.",
+    "Order": "Core entity. Stores bill number, customer details, items, advance/balance, status, and measurement image.",
+    "Customer": "Unique by mobile number. Stores history of orders.",
+    "Expense": "Monthly fixed expenses (rent, electricity, salaries).",
+    "CustomExpense": "Ad-hoc daily expenses.",
+    "ClothConfig": "Shop-specific pricing for different cloth types."
+  },
+  "frontend_pages": {
+    "App.jsx": {
+      "role": "Root Component & State Manager",
+      "functions": [
+        "Manages global Auth state (JWT token in localStorage)",
+        "Handles Tab navigation (New Order, Dashboard, Customers, Analytics, Profile)",
+        "Initializes and listens to syncManager.js for offline/online events",
+        "Renders the main layout, sidebar, and hamburger menu"
+      ],
+      "key_divs": {
+        "sidebar-nav": "Desktop vertical navigation menu",
+        "mobile-bottom-nav": "Mobile sticky bottom navigation",
+        "main-content-area": "Dynamic container rendering the active tab component"
+      }
+    },
+    "LandingPage.jsx": {
+      "role": "Public Marketing Page",
+      "functions": [
+        "Explains the SaaS features to potential customers",
+        "Displays pricing tiers (Basic, Premium, Enterprise)",
+        "Redirects to AuthPage for signup"
+      ],
+      "key_divs": {
+        "hero-section": "Main banner with call-to-action",
+        "features-grid": "Cards explaining offline mode, WhatsApp integration, etc.",
+        "pricing-section": "3-column grid showing subscription plans"
+      }
+    },
+    "AuthPage.jsx": {
+      "role": "Authentication Gateway",
+      "functions": [
+        "Handles Login and Registration",
+        "Communicates with /api/auth/login and /api/auth/register",
+        "Sets JWT token on success"
+      ],
+      "key_divs": {
+        "auth-card": "Centered white container with form inputs",
+        "form-fields": "Email and password inputs with validation",
+        "toggle-mode": "Button switching between Login and Signup modes"
+      }
+    },
+    "OrderForm.jsx": {
+      "role": "Order Creation & Measurement Sheet",
+      "functions": [
+        "Captures new order details (items, prices, advance payment)",
+        "Auto-detects returning customers by mobile number",
+        "Provides a Canvas for drawing/writing measurement sheets",
+        "Generates printable PDF bills"
+      ],
+      "key_divs": {
+        "customer-details-card": "Inputs for mobile number and name",
+        "canvas-container": "aspect-[4/3] drawing pad. Shows previous measurements if returning customer",
+        "edit-unlock-slider": "iOS-style slider to unlock a previous measurement sheet for editing",
+        "order-items-table": "Dynamic rows for cloth type, quantity, and price",
+        "financials-summary": "Calculates total, advance, and balance due",
+        "bill-series-popup": "Modal asking to link new order to previous bill suffix (e.g., -1, -2)"
+      }
+    },
+    "Canvas.jsx": {
+      "role": "Measurement Drawing Pad",
+      "functions": [
+        "HTML5 Canvas wrapper for drawing measurements",
+        "Supports undo/redo, colors, eraser, and resizing",
+        "Saves output as base64 webp image"
+      ],
+      "key_divs": {
+        "toolbar": "Top bar with color swatches, brush sizes, and undo/clear actions",
+        "canvas-wrapper": "Contains the actual <canvas> element and a grid background"
+      }
+    },
+    "Dashboard.jsx": {
+      "role": "Main Operational View",
+      "functions": [
+        "Shows top KPIs (Total Orders, Undelivered, Today's Revenue)",
+        "Lists recent orders with search and filtering",
+        "Allows changing order status (Ready, Delivered, Undelivered)"
+      ],
+      "key_divs": {
+        "stats-grid": "Top 4-column layout showing KPI cards",
+        "search-bar": "Input to filter orders by bill number, phone, or name",
+        "orders-table": "List of orders with colored status badges",
+        "action-buttons": "Buttons inside table rows to update status or view details"
+      }
+    },
+    "CustomerHistory.jsx": {
+      "role": "CRM and Customer Database",
+      "functions": [
+        "Lists all customers with their total order count",
+        "Shows selected customer's measurement sheet and past orders"
+      ],
+      "key_divs": {
+        "split-layout": "Grid with sidebar (list) on left and details on right",
+        "customer-list": "Scrollable sidebar of customer cards",
+        "customer-details-pane": "Right side showing measurement image and chronological order history"
+      }
+    },
+    "Analytics.jsx": {
+      "role": "Financial Dashboard",
+      "functions": [
+        "Calculates monthly profit (Revenue minus Expenses)",
+        "Manages fixed expenses (rent, electricity) and dynamic custom expenses",
+        "Renders revenue charts"
+      ],
+      "key_divs": {
+        "month-selector": "Dropdown to select reporting month",
+        "financial-summary-cards": "Revenue, Total Expenses, and Net Profit cards",
+        "expenses-manager": "Inputs for rent/electricity and a dynamic list for custom expenses",
+        "charts-container": "Renders Recharts bar/line graphs for daily/monthly trends"
+      }
+    },
+    "Profile.jsx": {
+      "role": "Shop Settings",
+      "functions": [
+        "Upload/update shop logo, name, and contact details",
+        "Configure custom default prices for cloth types (e.g., Shirt: ₹500)",
+        "Configure WhatsApp API integration"
+      ],
+      "key_divs": {
+        "shop-details-form": "Inputs for shop branding",
+        "cloth-pricing-config": "Dynamic list to set base prices",
+        "whatsapp-integration-card": "Instructions and fields for Meta Cloud API integration"
+      }
+    },
+    "AdminPanel.jsx": {
+      "role": "SaaS Superadmin Dashboard",
+      "functions": [
+        "Accessible only via /admin route by the platform owner",
+        "Lists all registered tenant shops",
+        "Shows platform-wide revenue and subscription statuses"
+      ],
+      "key_divs": {
+        "admin-stats": "Platform KPIs (Total MRR, Active Shops)",
+        "tenants-table": "List of users, their database usage, and subscription tier"
+      }
+    }
+  },
+  "core_utilities": {
+    "syncManager.js": {
+      "role": "Offline-First Synchronization Engine",
+      "mechanics": [
+        "pullServerChanges(): Fetches all records modified since last_sync_time and saves to Dexie.",
+        "syncPendingData(): Pushes all offline mutations (CREATE, UPDATE) from Dexie queue to server.",
+        "Triggers 'offline-sync-complete' event only when new data is pulled to refresh React Query cache without blocking the UI."
+      ]
+    },
+    "useShopData.js": {
+      "role": "TanStack Query Custom Hooks",
+      "mechanics": [
+        "Abstracts Dexie DB calls into React hooks (useOrders, useCustomers, useDashboardStats).",
+        "Uses 'placeholderData' to immediately render Skeleton loaders while reading from Dexie.",
+        "Implements useMutation for creating/updating orders, which writes to local DB and adds to sync_queue."
+      ]
+    }
+  }
+}

@@ -1,6 +1,17 @@
 import Dexie from 'dexie';
 
-export const db = new Dexie('TailorShopDB');
+const getUser = () => {
+  try {
+    const userStr = localStorage.getItem('tailor_user');
+    if (userStr) return JSON.parse(userStr);
+  } catch (e) {}
+  return null;
+};
+
+const user = getUser();
+const dbName = user && user.id ? `TailorShopDB_${user.id}` : 'TailorShopDB';
+
+export const db = new Dexie(dbName);
 
 // Define database schema
 // The first item is the primary key. Subsequent items are indexed fields.

@@ -1,0 +1,13 @@
+landing-page.png
+auth-login-page.png
+auth-signup-page.png
+new-order-page.png
+dashboard-page.png
+customers-page.png
+analytics-page.png
+profile-page.png
+admin-login-page.png
+admin-overview-page.png
+admin-users-page.png
+admin-cms-page.png
+admin-audit-page.png

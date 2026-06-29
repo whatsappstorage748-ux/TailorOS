@@ -83,10 +83,16 @@ export default function App() {
     const handleSyncComplete = () => {
       queryClient.invalidateQueries();
     };
+    const handleStorage = (e) => {
+      if (e.key === 'tailor_token' || e.key === 'tailor_user') {
+        window.location.reload();
+      }
+    };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     window.addEventListener('offline-sync-complete', handleSyncComplete);
+    window.addEventListener('storage', handleStorage);
 
     // Non-blocking: React renders first, then sync happens in background
     initSync();
@@ -95,6 +101,7 @@ export default function App() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('offline-sync-complete', handleSyncComplete);
+      window.removeEventListener('storage', handleStorage);
     };
   }, []);
 

@@ -60,7 +60,7 @@ export default function AuthPage({ onLogin, initialPlan, onBackToLanding }) {
        if (data.exists) {
          localStorage.setItem('tailor_token', data.token);
          localStorage.setItem('tailor_user', JSON.stringify(data.owner));
-         onLogin(data.token);
+         window.location.href = '/';
        } else {
          // Switch to Google Onboarding screen
          setGoogleOnboarding(true);
@@ -101,7 +101,7 @@ export default function AuthPage({ onLogin, initialPlan, onBackToLanding }) {
 
       localStorage.setItem('tailor_token', data.token);
       localStorage.setItem('tailor_user', JSON.stringify(data.owner));
-      onLogin(data.token);
+      window.location.href = '/';
     } catch (err) {
       setError(err.message);
     } finally {
@@ -137,7 +137,7 @@ export default function AuthPage({ onLogin, initialPlan, onBackToLanding }) {
       localStorage.setItem('tailor_token', data.token);
       localStorage.setItem('tailor_user', JSON.stringify(data.owner));
       
-      onLogin(data.token);
+      window.location.href = '/';
     } catch (err) {
       setError(err.message);
     } finally {
