@@ -11,7 +11,7 @@ const serializeBigInt = (obj) => {
 
 export const pullServerChanges = async (req, res) => {
   try {
-    const ownerId = req.shopOwnerId;
+    const ownerId = req.user.id;
     const sinceStr = req.query.since || '1970-01-01T00:00:00.000Z';
     const sinceDate = new Date(sinceStr);
 
