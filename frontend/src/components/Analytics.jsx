@@ -869,7 +869,7 @@ export default function Analytics() {
               </div>
             </div>
             <div className="p-6 bg-white">
-              {isLoadingDaily ? (
+              {isFetchingDaily ? (
                 <div className="py-20 text-center text-sm text-gray-400">Generating chart...</div>
               ) : (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">

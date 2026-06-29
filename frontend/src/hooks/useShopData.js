@@ -34,7 +34,11 @@ export const useDashboardStats = () => {
     queryKey: ['dashboard', 'stats'],
     queryFn: async () => {
       const orders = await db.orders.toArray();
-      const todayStr = new Date().toLocaleDateString('en-IN');
+      const now = new Date();
+      const todayY = now.getFullYear();
+      const todayM = now.getMonth();
+      const todayD = now.getDate();
+
       let undelivered = 0;
       let delivered = 0;
       let todayRev = 0;
@@ -43,10 +47,26 @@ export const useDashboardStats = () => {
       orders.forEach(o => {
         if (o.status !== 'Delivered') undelivered++;
         if (o.status === 'Delivered') delivered++;
-        const oDate = new Date(o.order_date).toLocaleDateString('en-IN');
-        if (oDate === todayStr) {
+        
+        const oDate = new Date(o.order_date);
+        const isCreatedToday = !isNaN(oDate.getTime()) && 
+                               oDate.getFullYear() === todayY && 
+                               oDate.getMonth() === todayM && 
+                               oDate.getDate() === todayD;
+        
+        if (isCreatedToday) {
           todayOrd++;
-          todayRev += (o.advance_amount || 0); 
+          todayRev += (o.status === 'Delivered' ? (parseFloat(o.total_amount) || 0) : (parseFloat(o.advance_amount) || 0)); 
+        }
+
+        const uDate = new Date(o.updated_at || o.order_date);
+        const isUpdatedToday = !isNaN(uDate.getTime()) && 
+                               uDate.getFullYear() === todayY && 
+                               uDate.getMonth() === todayM && 
+                               uDate.getDate() === todayD;
+        
+        if (isUpdatedToday && o.status === 'Delivered' && !isCreatedToday) {
+           todayRev += (parseFloat(o.balance_amount) || 0);
         }
       });
 
