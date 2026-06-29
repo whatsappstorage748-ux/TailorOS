@@ -75,6 +75,18 @@ export default function Analytics() {
   const [showSalariesModal, setShowSalariesModal] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [isLoadingSalaries, setIsLoadingSalaries] = useState(false);
+  
+  const [payrollMode, setPayrollMode] = useState(localStorage.getItem('payroll_frequency') || 'Monthly');
+  const [selectedWeek, setSelectedWeek] = useState(1);
+  const [employeeToDelete, setEmployeeToDelete] = useState(null);
+
+  useEffect(() => {
+    const handleSettingsChange = () => {
+      setPayrollMode(localStorage.getItem('payroll_frequency') || 'Monthly');
+    };
+    window.addEventListener('payroll-settings-changed', handleSettingsChange);
+    return () => window.removeEventListener('payroll-settings-changed', handleSettingsChange);
+  }, []);
 
   // Add Employee form state
   const [showAddEmployeeForm, setShowAddEmployeeForm] = useState(false);
@@ -335,13 +347,14 @@ export default function Analytics() {
   // Toggle paid status for employee salary
   const handleToggleSalary = async (employeeId) => {
     try {
+      const payload = { employee_id: employeeId, month: selectedMonth };
+      if (payrollMode === 'Weekly') {
+        payload.week = selectedWeek;
+      }
       const res = await fetchWithAuth(`${API_BASE}/api/analytics/salaries/toggle`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          employee_id: employeeId,
-          month: selectedMonth
-        })
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
         fetchSalaries();
@@ -349,6 +362,23 @@ export default function Analytics() {
       }
     } catch (error) {
       console.error('Error toggling salary:', error);
+    }
+  };
+
+  // Delete Employee
+  const handleDeleteEmployee = async () => {
+    if (!employeeToDelete) return;
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/api/employees/${employeeToDelete}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        setEmployeeToDelete(null);
+        fetchSalaries();
+        queryClient.invalidateQueries({ queryKey: ['analytics'] });
+      }
+    } catch (error) {
+      console.error('Error deleting employee:', error);
     }
   };
 
@@ -787,6 +817,21 @@ export default function Analytics() {
                   </button>
                 </form>
               )}
+              {payrollMode === 'Weekly' && (
+                <div className="flex bg-gray-100 p-1 rounded-lg self-start">
+                  {[1, 2, 3, 4].map(week => (
+                    <button
+                      key={week}
+                      onClick={() => setSelectedWeek(week)}
+                      className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                        selectedWeek === week ? 'bg-white text-brand-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Week {week}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="card p-3 bg-gray-50 flex items-center justify-between">
                 <div>
                   <p className="section-label mb-0.5">Total Paid This Month</p>
@@ -802,9 +847,37 @@ export default function Analytics() {
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="data-table">
-                    <thead><tr><th>Employee</th><th className="text-right">Monthly Salary</th><th className="text-center">Status</th></tr></thead>
+                    <thead>
+                      <tr>
+                        <th>Employee</th>
+                        <th className="text-right">Monthly Salary</th>
+                        <th className="text-center">Status</th>
+                        <th className="text-center w-12">Action</th>
+                      </tr>
+                    </thead>
                     <tbody>
-                      {employees.map((emp) => (
+                      {employees.map((emp) => {
+                        let isPaid = false;
+                        let statusText = 'Unpaid';
+                        let badgeClass = 'badge-amber';
+                        
+                        if (emp.status === 'Paid') {
+                          isPaid = true;
+                          statusText = 'Paid';
+                          badgeClass = 'badge-green';
+                        } else if (emp.status.startsWith('W:')) {
+                          const weeks = emp.status.substring(2).split(',').filter(Boolean);
+                          if (payrollMode === 'Weekly') {
+                            isPaid = weeks.includes(String(selectedWeek));
+                            statusText = isPaid ? 'Paid' : 'Unpaid';
+                            badgeClass = isPaid ? 'badge-green' : 'badge-amber';
+                          } else {
+                            statusText = `${weeks.length}/4 Weeks Paid`;
+                            badgeClass = 'bg-blue-50 text-blue-700 border border-blue-200';
+                          }
+                        }
+                        
+                        return (
                         <tr key={emp.employee_id}>
                           <td className="font-semibold">{emp.name}</td>
                           <td className="text-right font-mono">
@@ -829,20 +902,41 @@ export default function Analytics() {
                           </td>
                           <td className="text-center">
                             <button type="button" onClick={() => handleToggleSalary(emp.employee_id)}
-                              className={`px-3 py-1 rounded text-2xs font-bold uppercase tracking-wide transition ${
-                                emp.status === 'Paid' ? 'badge-green' : 'badge-amber'
-                              }`}>
-                              {emp.status === 'Paid' ? 'Paid' : 'Unpaid'}
+                              className={`px-3 py-1 rounded text-2xs font-bold uppercase tracking-wide transition ${badgeClass}`}>
+                              {statusText}
+                            </button>
+                          </td>
+                          <td className="text-center">
+                            <button type="button" onClick={() => setEmployeeToDelete(emp.employee_id)}
+                              className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Remove Employee">
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </td>
                         </tr>
-                      ))}
+                      )})}
                     </tbody>
                   </table>
                   </div>
                 )}
               </div>
             </div>
+            
+            {employeeToDelete && (
+              <div className="absolute inset-0 bg-black/20 flex items-center justify-center rounded-xl z-50">
+                <div className="bg-white p-5 rounded-lg max-w-sm w-full mx-4 shadow-2xl">
+                  <h4 className="text-sm font-bold text-gray-900 mb-2">Remove Employee</h4>
+                  <p className="text-xs text-gray-600 mb-5 leading-relaxed">
+                    Are you sure you want to remove this employee? Historical salary records will be preserved for accounting.
+                  </p>
+                  <div className="flex justify-end gap-3">
+                    <button className="btn-ghost text-xs py-1.5" onClick={() => setEmployeeToDelete(null)}>Cancel</button>
+                    <button className="btn-primary bg-red-600 hover:bg-red-700 text-xs py-1.5" onClick={handleDeleteEmployee}>
+                      Yes, Remove
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

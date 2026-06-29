@@ -8,7 +8,7 @@ import AuthPage from './components/AuthPage';
 import LandingPage from './components/LandingPage';
 import AdminPanel from './components/AdminPanel';
 import Profile from './components/Profile';
-import { Scissors, LayoutDashboard, UserSearch, ClipboardList, BarChart2, LogOut, Menu, User, Shield, CreditCard } from 'lucide-react';
+import { Scissors, LayoutDashboard, UserSearch, ClipboardList, BarChart2, LogOut, Menu, User, Shield, CreditCard, DollarSign } from 'lucide-react';
 import { isOnline, syncPendingData, initSync } from './utils/syncManager';
 
 const NAV_ITEMS = [
@@ -69,6 +69,10 @@ export default function App() {
   
   // Hamburger Dropdown toggle
   const [showDropdown, setShowDropdown] = useState(false);
+  
+  // Payroll Settings Modal state
+  const [showPayrollSettings, setShowPayrollSettings] = useState(false);
+  const [payrollMode, setPayrollMode] = useState(localStorage.getItem('payroll_frequency') || 'Monthly');
 
   const isAdminRoute = window.location.pathname === '/admin';
 
@@ -291,6 +295,17 @@ export default function App() {
               </button>
 
               <button
+                onClick={() => {
+                  setShowPayrollSettings(true);
+                  setShowDropdown(false);
+                }}
+                className="w-full flex items-center gap-2 px-4 py-2 text-xs text-left text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <DollarSign className="w-4 h-4 text-gray-400" />
+                Payroll Settings
+              </button>
+
+              <button
                 onClick={handleLogout}
                 className="w-full flex items-center gap-2 px-4 py-2 text-xs text-left text-red-600 hover:bg-red-50 transition-colors"
               >
@@ -301,6 +316,39 @@ export default function App() {
           )}
         </div>
       </header>
+
+      {/* Payroll Settings Modal */}
+      {showPayrollSettings && (
+        <div className="modal-overlay" onClick={() => setShowPayrollSettings(false)}>
+          <div className="modal-panel max-w-sm" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="text-sm font-semibold text-gray-900">Payroll Settings</h3>
+              <button className="btn-ghost p-1.5" onClick={() => setShowPayrollSettings(false)}>
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 flex flex-col gap-4">
+              <label className="section-label">Payroll Frequency</label>
+              <select 
+                className="field-input" 
+                value={payrollMode}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPayrollMode(val);
+                  localStorage.setItem('payroll_frequency', val);
+                  window.dispatchEvent(new Event('payroll-settings-changed'));
+                }}
+              >
+                <option value="Monthly">Monthly</option>
+                <option value="Weekly">Weekly</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+                Choose how often you manage staff payments. Weekly tracking enables 4 tabs per employee for partial payments.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── MAIN CONTENT ────────────────────────────────────────── */}
       <main className="flex-1 overflow-y-auto pb-16 sm:pb-0">

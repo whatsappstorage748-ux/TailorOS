@@ -1,6 +1,17 @@
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
+// Helper to calculate paid amount based on payment status (supports weekly partial payments)
+const calculatePaidSalary = (status, baseAmount) => {
+  if (status === 'Paid') return baseAmount;
+  if (status === 'Unpaid' || !status) return 0;
+  if (status.startsWith('W:')) {
+    const weeks = status.substring(2).split(',').filter(Boolean);
+    return baseAmount * (weeks.length / 4);
+  }
+  return 0;
+};
+
 // Get monthly analytics summary (Revenue, Expenses, Salaries, Profit)
 export const getAnalyticsSummary = async (req, res) => {
   try {
@@ -33,13 +44,11 @@ export const getAnalyticsSummary = async (req, res) => {
     }
 
     const salariesList = await prisma.employeeSalary.findMany({
-      where: {
-        employee: { owner_id },
-        month,
-        status: 'Paid'
-      }
+      where: { employee: { owner_id }, month }
     });
-    const salariesPaid = salariesList.reduce((sum, s) => sum + s.amount, 0);
+    const salariesPaid = salariesList.reduce((sum, s) => {
+      return sum + calculatePaidSalary(s.status, s.amount);
+    }, 0);
 
     const customExpensesList = await prisma.customExpense.findMany({
       where: { owner_id, month }
@@ -103,7 +112,7 @@ export const getEmployeeSalaries = async (req, res) => {
       return res.status(400).json({ message: 'Month is required' });
     }
 
-    let employees = await prisma.employee.findMany({ where: { owner_id } });
+    let employees = await prisma.employee.findMany({ where: { owner_id, base_salary: { gte: 0 } } });
     if (employees.length === 0) {
       const defaultStaff = [
         { owner_id, name: 'Ramesh (Master Tailor)', base_salary: 15000 },
@@ -111,7 +120,7 @@ export const getEmployeeSalaries = async (req, res) => {
         { owner_id, name: 'Mahesh (Helper)', base_salary: 8000 }
       ];
       await prisma.employee.createMany({ data: defaultStaff });
-      employees = await prisma.employee.findMany({ where: { owner_id } });
+      employees = await prisma.employee.findMany({ where: { owner_id, base_salary: { gte: 0 } } });
     }
 
     const results = await Promise.all(employees.map(async (emp) => {
@@ -146,7 +155,7 @@ export const getEmployeeSalaries = async (req, res) => {
 // Toggle paid / unpaid salary status for an employee in a specific month
 export const toggleEmployeeSalary = async (req, res) => {
   try {
-    const { employee_id, month } = req.body;
+    const { employee_id, month, week } = req.body;
     const owner_id = req.user.id;
     if (!employee_id || !month) {
       return res.status(400).json({ message: 'Employee ID and month are required' });
@@ -162,17 +171,51 @@ export const toggleEmployeeSalary = async (req, res) => {
       where: { employee_id_month: { employee_id, month } }
     });
 
+    let newStatus = 'Paid';
+
+    if (week) {
+      const w = String(week);
+      let currentWeeks = [];
+      if (salaryRecord && salaryRecord.status === 'Paid') {
+        currentWeeks = ['1', '2', '3', '4'];
+      } else if (salaryRecord && salaryRecord.status.startsWith('W:')) {
+        currentWeeks = salaryRecord.status.substring(2).split(',').filter(Boolean);
+      }
+      
+      if (currentWeeks.includes(w)) {
+        currentWeeks = currentWeeks.filter(val => val !== w);
+      } else {
+        currentWeeks.push(w);
+      }
+      
+      // Sort to keep W:1,2,3 format consistent
+      currentWeeks.sort();
+
+      if (currentWeeks.length === 4) {
+        newStatus = 'Paid';
+      } else if (currentWeeks.length === 0) {
+        newStatus = 'Unpaid';
+      } else {
+        newStatus = `W:${currentWeeks.join(',')}`;
+      }
+    } else {
+      // Standard monthly toggle
+      if (salaryRecord) {
+        newStatus = salaryRecord.status === 'Paid' ? 'Unpaid' : 'Paid';
+      }
+    }
+
     if (salaryRecord) {
       salaryRecord = await prisma.employeeSalary.update({
         where: { employee_id_month: { employee_id, month } },
-        data: { status: salaryRecord.status === 'Paid' ? 'Unpaid' : 'Paid' }
+        data: { status: newStatus }
       });
     } else {
       salaryRecord = await prisma.employeeSalary.create({
         data: {
           employee_id,
           month,
-          status: 'Paid',
+          status: newStatus,
           amount: employee.base_salary
         }
       });
@@ -216,9 +259,11 @@ export const getDailyBreakdown = async (req, res) => {
     const electricity = expense ? expense.electricity : 2000;
 
     const salariesList = await prisma.employeeSalary.findMany({
-      where: { employee: { owner_id }, month, status: 'Paid' }
+      where: { employee: { owner_id }, month }
     });
-    const salariesPaid = salariesList.reduce((sum, s) => sum + s.amount, 0);
+    const salariesPaid = salariesList.reduce((sum, s) => {
+      return sum + calculatePaidSalary(s.status, s.amount);
+    }, 0);
 
     const customExpensesList = await prisma.customExpense.findMany({ where: { owner_id, month } });
     const totalCustomExpenses = customExpensesList.reduce((sum, e) => sum + e.amount, 0);
@@ -377,6 +422,29 @@ export const updateEmployee = async (req, res) => {
   } catch (error) {
     console.error('Error in updateEmployee:', error);
     return res.status(500).json({ message: 'Server error updating employee' });
+  }
+};
+
+export const deleteEmployee = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const owner_id = req.user.id;
+
+    const employee = await prisma.employee.findUnique({ where: { id } });
+    if (!employee || employee.owner_id !== owner_id) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    // Soft delete employee to preserve historical financial records
+    await prisma.employee.update({
+      where: { id },
+      data: { base_salary: -1 }
+    });
+
+    return res.status(200).json({ message: 'Employee deleted successfully' });
+  } catch (error) {
+    console.error('Error in deleteEmployee:', error);
+    return res.status(500).json({ message: 'Server error deleting employee' });
   }
 };
 

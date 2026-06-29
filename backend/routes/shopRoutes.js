@@ -26,6 +26,7 @@ import {
   deleteCustomExpense,
   addEmployee,
   updateEmployee,
+  deleteEmployee,
   getClothConfigs,
   saveClothConfig
 } from '../controllers/analyticsController.js';
@@ -65,6 +66,7 @@ router.delete('/expenses/custom/:id', deleteCustomExpense);
 // Employee Registry routes
 router.post('/employees', addEmployee);
 router.put('/employees/:id', updateEmployee);
+router.delete('/employees/:id', deleteEmployee);
 
 // Cloth pricing configurations routes
 router.get('/cloth-configs', getClothConfigs);
