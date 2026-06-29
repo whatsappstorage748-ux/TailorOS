@@ -40,12 +40,17 @@ export default function Analytics() {
   } else if (viewMode === 'yearly' && yearlyStatsData) {
      const totalRev = yearlyStats.reduce((s, d) => s + d.revenue, 0);
      const totalExp = yearlyStats.reduce((s, d) => s + d.expense, 0);
+     const totalRent = yearlyStats.reduce((s, d) => s + (d.rent || 0), 0);
+     const totalElectricity = yearlyStats.reduce((s, d) => s + (d.electricity || 0), 0);
+     const totalSalaries = yearlyStats.reduce((s, d) => s + (d.salariesPaid || 0), 0);
+     const totalCustomExp = yearlyStats.reduce((s, d) => s + (d.customExpensesPaid || 0), 0);
+     
      summary = {
        revenue: totalRev,
-       rent: 0,
-       electricity: 0,
-       salariesPaid: totalExp,
-       customExpensesPaid: 0,
+       rent: totalRent,
+       electricity: totalElectricity,
+       salariesPaid: totalSalaries,
+       customExpensesPaid: totalCustomExp,
        profit: totalRev - totalExp
      };
   }

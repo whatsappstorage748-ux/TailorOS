@@ -287,10 +287,34 @@ export const useAnalyticsYearly = (year) => {
       const yearlyStats = [];
       const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+      const salariesPromises = [];
+      for (let m = 0; m < 12; m++) {
+        const monthStr = `${year}-${String(m + 1).padStart(2, '0')}`;
+        salariesPromises.push(
+          fetchWithAuth(`${API_BASE}/api/analytics/salaries?month=${monthStr}`)
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+              if (!data) return 0;
+              return data.employees.reduce((acc, emp) => {
+                 if (emp.status === 'Paid') return acc + emp.amount;
+                 if (emp.status.startsWith('W:')) {
+                    const weeksCount = emp.status.substring(2).split(',').filter(Boolean).length;
+                    return acc + (emp.amount * (weeksCount / 4));
+                 }
+                 return acc;
+              }, 0);
+            })
+            .catch(() => 0)
+        );
+      }
+      
+      const monthlySalaries = await Promise.all(salariesPromises);
+
       for (let m = 0; m < 12; m++) {
         const monthStr = `${year}-${String(m + 1).padStart(2, '0')}`;
         const expenses = allExpenses.find(e => e.month === monthStr) || { rent: 0, electricity: 0 };
-        const expense = expenses.rent + expenses.electricity;
+        const rent = parseFloat(expenses.rent) || 0;
+        const electricity = parseFloat(expenses.electricity) || 0;
 
         // Fetch custom expenses for this month
         const customExpensesList = await db.custom_expenses.where('month').equals(monthStr).toArray();
@@ -312,8 +336,18 @@ export const useAnalyticsYearly = (year) => {
           }
         });
 
-        const totalExpense = expense + customExpenseTotal;
-        yearlyStats.push({ label: monthNames[m], revenue, expense: totalExpense, profit: revenue - totalExpense });
+        const salariesPaid = monthlySalaries[m];
+        const totalExpense = rent + electricity + customExpenseTotal + salariesPaid;
+        yearlyStats.push({ 
+          label: monthNames[m], 
+          revenue, 
+          expense: totalExpense, 
+          rent, 
+          electricity, 
+          customExpensesPaid: customExpenseTotal, 
+          salariesPaid,
+          profit: revenue - totalExpense 
+        });
       }
       return { yearlyStats };
     },
