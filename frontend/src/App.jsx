@@ -8,7 +8,8 @@ import AuthPage from './components/AuthPage';
 import LandingPage from './components/LandingPage';
 import AdminPanel from './components/AdminPanel';
 import Profile from './components/Profile';
-import { Scissors, LayoutDashboard, UserSearch, ClipboardList, BarChart2, LogOut, Menu, User, Shield, CreditCard, DollarSign, X, RefreshCw } from 'lucide-react';
+import { Scissors, LayoutDashboard, UserSearch, ClipboardList, BarChart2, LogOut, Menu, User, Shield, CreditCard, DollarSign, X } from 'lucide-react';
+import ForceSyncButton from './components/ForceSyncButton';
 import { isOnline, syncPendingData, initSync, requeueStuckOrders } from './utils/syncManager';
 
 const NAV_ITEMS = [
@@ -241,14 +242,7 @@ export default function App() {
             <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-emerald-500' : 'bg-rose-500'}`} />
             {online ? 'Cloud Sync Active' : 'Offline Mode'}
           </div>
-          <button 
-            onClick={() => { requeueStuckOrders(); syncPendingData(); }}
-            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-brand-600 transition-colors"
-            title="Retry syncing stuck pending orders"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Force Sync</span>
-          </button>
+          <ForceSyncButton />
         </div>
 
         {/* Desktop Navigation links — hidden on mobile */}
