@@ -8,7 +8,8 @@ import AuthPage from './components/AuthPage';
 import LandingPage from './components/LandingPage';
 import AdminPanel from './components/AdminPanel';
 import Profile from './components/Profile';
-import { Scissors, LayoutDashboard, UserSearch, ClipboardList, BarChart2, LogOut, Menu, User, Shield, CreditCard, DollarSign, X } from 'lucide-react';
+import { Scissors, LayoutDashboard, UserSearch, ClipboardList, BarChart2, LogOut, User, Shield, CreditCard, DollarSign, X } from 'lucide-react';
+import AnimatedHamburger from './components/AnimatedHamburger';
 import ForceSyncButton from './components/ForceSyncButton';
 import { isOnline, syncPendingData, initSync, requeueStuckOrders } from './utils/syncManager';
 
@@ -274,7 +275,7 @@ export default function App() {
             onClick={() => setShowDropdown(!showDropdown)}
             className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-600 focus:outline-none transition-colors border border-gray-200"
           >
-            <Menu className="w-5 h-5" />
+            <AnimatedHamburger isOpen={showDropdown} />
           </button>
 
           {/* Three Lines Dropdown Menu */}
