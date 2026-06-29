@@ -120,11 +120,38 @@ export const syncPendingData = async () => {
  * Fires immediately but does NOT delay the first render.
  * Uses setTimeout(0) to yield the main thread first so the UI renders.
  */
+export const requeueStuckOrders = async () => {
+  const offlineOrders = await db.orders.filter(o => o.bill_number && o.bill_number.startsWith('OFFLINE-')).toArray();
+  const queue = await db.sync_queue.toArray();
+  
+  let requeued = 0;
+  for (const order of offlineOrders) {
+    const isInQueue = queue.some(item => item.action === 'CREATE_ORDER' && item.temp_bill_number === order.bill_number);
+    if (!isInQueue) {
+      await db.sync_queue.add({
+        action: 'CREATE_ORDER',
+        endpoint: '/api/orders',
+        method: 'POST',
+        body: order,
+        temp_bill_number: order.bill_number,
+        timestamp: new Date().toISOString()
+      });
+      requeued++;
+    }
+  }
+  
+  if (requeued > 0) {
+    console.log(`[Sync] Re-queued ${requeued} stuck offline orders for sync.`);
+    syncPendingData();
+  }
+};
+
 export const initSync = () => {
   if (typeof window === 'undefined') return;
 
   // Yield to browser so React can render first, then sync in background
   setTimeout(() => {
+    requeueStuckOrders().catch(err => console.error('[Sync] Requeue error:', err));
     syncPendingData().catch(err => console.error('[Sync] Init sync error:', err));
   }, 0);
 };
@@ -132,6 +159,7 @@ export const initSync = () => {
 // Background sync interval — every 60 seconds (was 30s, halved server load)
 if (typeof window !== 'undefined') {
   setInterval(syncPendingData, 60000);
+  setInterval(requeueStuckOrders, 6 * 60 * 60 * 1000);
 
   // Sync immediately when coming back online
   window.addEventListener('online', () => {

@@ -8,8 +8,8 @@ import AuthPage from './components/AuthPage';
 import LandingPage from './components/LandingPage';
 import AdminPanel from './components/AdminPanel';
 import Profile from './components/Profile';
-import { Scissors, LayoutDashboard, UserSearch, ClipboardList, BarChart2, LogOut, Menu, User, Shield, CreditCard, DollarSign, X } from 'lucide-react';
-import { isOnline, syncPendingData, initSync } from './utils/syncManager';
+import { Scissors, LayoutDashboard, UserSearch, ClipboardList, BarChart2, LogOut, Menu, User, Shield, CreditCard, DollarSign, X, RefreshCw } from 'lucide-react';
+import { isOnline, syncPendingData, initSync, requeueStuckOrders } from './utils/syncManager';
 
 const NAV_ITEMS = [
   { id: 'create',    label: 'New Order',       icon: ClipboardList },
@@ -232,13 +232,23 @@ export default function App() {
         </div>
 
         {/* Online/Offline Status Indicator */}
-        <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase border transition-all mr-auto ${
-          online 
-            ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-            : 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse'
-        }`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-          {online ? 'Cloud Sync Active' : 'Offline Mode'}
+        <div className="flex items-center gap-3 mr-auto">
+          <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase border transition-all ${
+            online 
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+              : 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+            {online ? 'Cloud Sync Active' : 'Offline Mode'}
+          </div>
+          <button 
+            onClick={() => { requeueStuckOrders(); syncPendingData(); }}
+            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-brand-600 transition-colors"
+            title="Retry syncing stuck pending orders"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Force Sync</span>
+          </button>
         </div>
 
         {/* Desktop Navigation links — hidden on mobile */}
