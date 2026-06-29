@@ -1,15 +1,17 @@
 .hamburglar-wrapper {
   width: 24px;
   height: 24px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  position: relative;
+  
+  
 }
 
 .hamburglar {
   transform: scale(0.35);
-  position: relative;
-  display: block;
+  transform-origin: top left;
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 68px;
   height: 68px;
   background: transparent;
