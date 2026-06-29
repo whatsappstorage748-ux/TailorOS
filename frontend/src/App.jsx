@@ -8,7 +8,7 @@ import AuthPage from './components/AuthPage';
 import LandingPage from './components/LandingPage';
 import AdminPanel from './components/AdminPanel';
 import Profile from './components/Profile';
-import { Scissors, LayoutDashboard, UserSearch, ClipboardList, BarChart2, LogOut, Menu, User, Shield, CreditCard, DollarSign } from 'lucide-react';
+import { Scissors, LayoutDashboard, UserSearch, ClipboardList, BarChart2, LogOut, Menu, User, Shield, CreditCard, DollarSign, X } from 'lucide-react';
 import { isOnline, syncPendingData, initSync } from './utils/syncManager';
 
 const NAV_ITEMS = [
