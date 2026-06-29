@@ -177,9 +177,28 @@ export const useAnalyticsSummary = (month) => {
       const orders = await db.orders.toArray();
       const expenses = await db.expenses.where('month').equals(month).first() || { rent: 0, electricity: 0 };
       
-      const monthOrders = orders.filter(o => o.order_date && o.order_date.startsWith(month));
-      const revenue = monthOrders.reduce((sum, o) => sum + (o.advance_amount || 0) + (o.balance_amount || 0), 0);
+      const year = parseInt(month.split('-')[0], 10);
+      const mth = parseInt(month.split('-')[1], 10) - 1; // 0-indexed month
+
+      let revenue = 0;
+      orders.forEach(o => {
+        const oDate = new Date(o.order_date);
+        const isCreatedThisMonth = !isNaN(oDate.getTime()) && oDate.getFullYear() === year && oDate.getMonth() === mth;
+        
+        if (isCreatedThisMonth) {
+          revenue += (o.status === 'Delivered' ? (parseFloat(o.total_amount) || 0) : (parseFloat(o.advance_amount) || 0));
+        }
+        
+        const uDate = new Date(o.updated_at || o.order_date);
+        const isUpdatedThisMonth = !isNaN(uDate.getTime()) && uDate.getFullYear() === year && uDate.getMonth() === mth;
+        if (isUpdatedThisMonth && o.status === 'Delivered' && !isCreatedThisMonth) {
+          revenue += (parseFloat(o.balance_amount) || 0);
+        }
+      });
       
+      const customExpensesList = await db.custom_expenses.where('month').equals(month).toArray();
+      const customExpensesPaid = customExpensesList.reduce((sum, ce) => sum + (parseFloat(ce.amount) || 0), 0);
+
       let salariesPaid = 0;
       try {
         const res = await fetchWithAuth(`${API_BASE}/api/analytics/salaries?month=${month}`);
@@ -203,8 +222,8 @@ export const useAnalyticsSummary = (month) => {
         rent: expenses.rent,
         electricity: expenses.electricity,
         salariesPaid,
-        customExpensesPaid: 0,
-        profit: revenue - expenses.rent - expenses.electricity - salariesPaid
+        customExpensesPaid,
+        profit: revenue - expenses.rent - expenses.electricity - salariesPaid - customExpensesPaid
       };
     },
     enabled: !!month,
@@ -273,6 +292,10 @@ export const useAnalyticsYearly = (year) => {
         const expenses = allExpenses.find(e => e.month === monthStr) || { rent: 0, electricity: 0 };
         const expense = expenses.rent + expenses.electricity;
 
+        // Fetch custom expenses for this month
+        const customExpensesList = await db.custom_expenses.where('month').equals(monthStr).toArray();
+        const customExpenseTotal = customExpensesList.reduce((sum, ce) => sum + (parseFloat(ce.amount) || 0), 0);
+
         let revenue = 0;
         orders.forEach(o => {
           const oDate = new Date(o.order_date);
@@ -289,7 +312,8 @@ export const useAnalyticsYearly = (year) => {
           }
         });
 
-        yearlyStats.push({ label: monthNames[m], revenue, expense, profit: revenue - expense });
+        const totalExpense = expense + customExpenseTotal;
+        yearlyStats.push({ label: monthNames[m], revenue, expense: totalExpense, profit: revenue - totalExpense });
       }
       return { yearlyStats };
     },
