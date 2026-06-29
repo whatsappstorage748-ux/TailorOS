@@ -714,7 +714,7 @@ export default function CustomerHistory() {
                     <tbody>
                       {orders.map((order) => (
                         <tr key={order.bill_number} onClick={() => openOrder(order.bill_number)}>
-                          <td><span className="font-mono text-xs font-bold text-gray-500">ON{String(order.id).padStart(6, '0')}</span></td>
+                          <td><span className="font-mono text-xs font-bold text-gray-500">{order.id ? 'ON' + String(order.id).padStart(6, '0') : 'Pending'}</span></td>
                           <td>{renderBillNumber(order.bill_number)}</td>
                           <td><span className="text-xs text-gray-500">{fmt(order.order_date)}</span></td>
                           <td className="text-right"><span className="font-semibold">₹{order.total_amount}</span></td>
@@ -756,7 +756,7 @@ export default function CustomerHistory() {
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-semibold text-gray-900">Order Details</h3>
                   <span className="font-mono text-xs text-brand-600 bg-brand-50 px-2 py-0.5 rounded border border-brand-100 font-bold">
-                    ON{String(selectedOrder.order.id).padStart(6, '0')}
+                    {selectedOrder.order.id ? 'ON' + String(selectedOrder.order.id).padStart(6, '0') : 'Pending'}
                   </span>
                   <span>{renderBillNumber(selectedOrder.order.bill_number)}</span>
                 </div>
@@ -793,7 +793,7 @@ export default function CustomerHistory() {
                     </div>
                     <div>
                       <p className="text-xs text-gray-400 mb-0.5">Order ID</p>
-                      <p className="font-mono font-bold text-gray-700">ON{String(selectedOrder.order.id).padStart(6, '0')}</p>
+                      <p className="font-mono font-bold text-gray-700">{selectedOrder.order.id ? 'ON' + String(selectedOrder.order.id).padStart(6, '0') : 'Pending'}</p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-400 mb-0.5">Bill Number</p>
