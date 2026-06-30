@@ -41,6 +41,8 @@ export const useDashboardStats = () => {
       const todayD = now.getDate();
 
       let undelivered = 0;
+      let ready = 0;
+      let pending = 0;
       let delivered = 0;
       let todayRev = 0;
       let todayOrd = 0;
@@ -48,6 +50,8 @@ export const useDashboardStats = () => {
       orders.forEach(o => {
         if (o.status !== 'Delivered') undelivered++;
         if (o.status === 'Delivered') delivered++;
+        if (o.status === 'Ready') ready++;
+        if (o.status === 'Undelivered') pending++;
         
         const oDate = new Date(o.order_date);
         const isCreatedToday = !isNaN(oDate.getTime()) && 
@@ -74,13 +78,15 @@ export const useDashboardStats = () => {
       return {
         totalOrders: orders.length,
         undeliveredOrders: undelivered,
+        readyOrders: ready,
+        pendingOrders: pending,
         deliveredOrders: delivered,
         todayRevenue: todayRev,
         todayOrders: todayOrd
       };
     },
     // placeholderData: isFetching=true on first render → skeleton fires correctly
-    placeholderData: { totalOrders: 0, undeliveredOrders: 0, deliveredOrders: 0, todayRevenue: 0, todayOrders: 0 },
+    placeholderData: { totalOrders: 0, undeliveredOrders: 0, readyOrders: 0, pendingOrders: 0, deliveredOrders: 0, todayRevenue: 0, todayOrders: 0 },
     staleTime: 1000 * 60 * 5,   // 5 min — reuse on tab switch
     gcTime: 1000 * 60 * 30,     // 30 min — keep in memory when unmounted
   });

@@ -542,15 +542,26 @@ const handlePrintInvoice = (selectedOrder) => {
   printWindow.document.close();
 };
 
-function StatCard({ icon: Icon, label, value, iconBg, iconColor }) {
+function StatCard({ icon: Icon, label, value, iconBg, iconColor, onClick, isActive }) {
   return (
-    <div className="stat-card">
-      <div className={`stat-icon ${iconBg}`}>
-        <Icon className={`w-4 h-4 ${iconColor}`} />
-      </div>
-      <div>
-        <p className="section-label mb-0.5">{label}</p>
-        <p className="text-xl font-bold text-gray-900 leading-none">{value}</p>
+    <div 
+      className={`p-4 rounded-xl border bg-white transition-all duration-150 ease-in-out ${
+        onClick ? 'cursor-pointer' : ''
+      } ${
+        isActive 
+          ? 'border-brand-500 ring-1 ring-brand-500 shadow-sm' 
+          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 shadow-sm'
+      }`} 
+      onClick={onClick}
+    >
+      <div className="flex items-center gap-3.5">
+        <div className={`p-2 rounded-lg transition-colors ${isActive ? 'bg-brand-50' : iconBg}`}>
+          <Icon className={`w-4 h-4 ${isActive ? 'text-brand-600' : iconColor}`} />
+        </div>
+        <div>
+          <p className={`text-xs font-semibold tracking-wide mb-1 transition-colors ${isActive ? 'text-brand-600' : 'text-gray-500'}`}>{label}</p>
+          <p className="text-xl font-bold text-gray-900 leading-none tracking-tight">{value}</p>
+        </div>
       </div>
     </div>
   );
@@ -559,6 +570,8 @@ function StatCard({ icon: Icon, label, value, iconBg, iconColor }) {
 export default function Dashboard({ refreshTrigger }) {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [dateFilter, setDateFilter] = useState('All');
   const [selectedOrder, setSelectedOrder] = useState(null);
 
   // TanStack Query Hooks
@@ -566,8 +579,102 @@ export default function Dashboard({ refreshTrigger }) {
   const { data: ordersData, isFetching: isOrdersFetching } = useOrders(searchQuery);
   const { mutate: updateStatus, isPending: isUpdatingStatus } = useUpdateOrderStatus();
 
-  const stats = statsData || { totalOrders: 0, undeliveredOrders: 0, deliveredOrders: 0, todayRevenue: 0, todayOrders: 0 };
-  const orders = ordersData?.orders || [];
+  const allOrders = ordersData?.orders || [];
+  
+  // Date filter options
+  const monthOptionsSet = new Set();
+  const yearOptionsSet = new Set();
+
+  allOrders.forEach(o => {
+    const d = new Date(o.order_date);
+    if (!isNaN(d)) {
+      const yStr = `${d.getFullYear()}`;
+      const mStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      yearOptionsSet.add(yStr);
+      monthOptionsSet.add(mStr);
+    }
+  });
+
+  const sortedMonths = Array.from(monthOptionsSet).sort((a,b) => b.localeCompare(a));
+  const sortedYears = Array.from(yearOptionsSet).sort((a,b) => b.localeCompare(a));
+  
+  const now = new Date();
+  const thisMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  const formatMonth = (mStr) => {
+    if (mStr === thisMonthStr) return "This Month";
+    const [y, m] = mStr.split('-');
+    const date = new Date(y, m - 1);
+    return date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+  };
+
+  // 1. Date Filter
+  let dateFilteredOrders = allOrders;
+  if (dateFilter !== 'All') {
+    dateFilteredOrders = allOrders.filter(o => {
+      const d = new Date(o.order_date);
+      if (isNaN(d)) return false;
+      
+      if (dateFilter.length === 4) {
+        return `${d.getFullYear()}` === dateFilter;
+      } else {
+        const mStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        return mStr === dateFilter;
+      }
+    });
+  }
+
+  // 2. Compute stats
+  const dynamicStats = {
+    totalOrders: dateFilteredOrders.length,
+    pendingOrders: 0,
+    readyOrders: 0,
+    deliveredOrders: 0,
+    todayRevenue: 0,
+    todayOrders: 0
+  };
+
+  const todayY = now.getFullYear();
+  const todayM = now.getMonth();
+  const todayD = now.getDate();
+
+  dateFilteredOrders.forEach(o => {
+    if (o.status === 'Undelivered') dynamicStats.pendingOrders++;
+    if (o.status === 'Ready') dynamicStats.readyOrders++;
+    if (o.status === 'Delivered') dynamicStats.deliveredOrders++;
+
+    const oDate = new Date(o.order_date);
+    const isCreatedToday = !isNaN(oDate.getTime()) && 
+                           oDate.getFullYear() === todayY && 
+                           oDate.getMonth() === todayM && 
+                           oDate.getDate() === todayD;
+    
+    if (isCreatedToday) {
+      dynamicStats.todayOrders++;
+      dynamicStats.todayRevenue += (o.status === 'Delivered' ? (parseFloat(o.total_amount) || 0) : (parseFloat(o.advance_amount) || 0)); 
+    }
+
+    const uDate = new Date(o.updated_at || o.order_date);
+    const isUpdatedToday = !isNaN(uDate.getTime()) && 
+                           uDate.getFullYear() === todayY && 
+                           uDate.getMonth() === todayM && 
+                           uDate.getDate() === todayD;
+    
+    if (isUpdatedToday && o.status === 'Delivered' && !isCreatedToday) {
+       dynamicStats.todayRevenue += (parseFloat(o.balance_amount) || 0);
+    }
+  });
+
+  const stats = dynamicStats;
+
+  // 3. Status Filter
+  let orders = dateFilteredOrders;
+  if (statusFilter !== 'All') {
+    orders = orders.filter(o => {
+      if (statusFilter === 'Pending') return o.status === 'Undelivered';
+      return o.status === statusFilter;
+    });
+  }
 
   // Skeleton: only show on true first-load (fetching + no data yet)
   const showSkeleton = isStatsFetching && orders.length === 0;
@@ -627,12 +734,13 @@ export default function Dashboard({ refreshTrigger }) {
         <>
 
       {/* ── KPI STATS ROW ─────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <StatCard icon={Package}      label="Total Orders"    value={stats.totalOrders}      iconBg="bg-gray-100"     iconColor="text-gray-600" />
-        <StatCard icon={Clock}        label="Undelivered"     value={stats.undeliveredOrders} iconBg="bg-red-50"       iconColor="text-red-500"  />
-        <StatCard icon={CheckCircle}  label="Delivered"       value={stats.deliveredOrders}   iconBg="bg-emerald-50"   iconColor="text-emerald-600" />
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <StatCard icon={Package}      label="Total Orders"    value={stats.totalOrders}      iconBg="bg-gray-100"     iconColor="text-gray-600" onClick={() => setStatusFilter('All')} isActive={statusFilter === 'All'} />
+        <StatCard icon={Clock}        label="Pending"         value={stats.pendingOrders}    iconBg="bg-blue-50"      iconColor="text-blue-500" onClick={() => setStatusFilter('Pending')} isActive={statusFilter === 'Pending'} />
+        <StatCard icon={CheckCircle2} label="Undelivered"     value={stats.readyOrders}      iconBg="bg-amber-50"     iconColor="text-amber-500" onClick={() => setStatusFilter('Ready')} isActive={statusFilter === 'Ready'} />
+        <StatCard icon={CheckCircle}  label="Delivered"       value={stats.deliveredOrders}   iconBg="bg-emerald-50"   iconColor="text-emerald-600" onClick={() => setStatusFilter('Delivered')} isActive={statusFilter === 'Delivered'} />
         <StatCard icon={IndianRupee}  label="Today's Revenue" value={`₹${stats.todayRevenue || 0}`} iconBg="bg-brand-50" iconColor="text-brand-600" />
-        <StatCard icon={Calendar}     label="Today's Orders"  value={stats.todayOrders}       iconBg="bg-amber-50"    iconColor="text-amber-600" />
+        <StatCard icon={Calendar}     label="Today's Orders"  value={stats.todayOrders}       iconBg="bg-purple-50"    iconColor="text-purple-600" />
       </div>
 
       {/* ── ORDERS TABLE ──────────────────────────────── */}
@@ -644,17 +752,50 @@ export default function Dashboard({ refreshTrigger }) {
             <h2 className="text-sm font-semibold text-gray-900">
               {searchQuery ? 'Search Results' : 'Active Orders'}
             </h2>
-            {!searchQuery && <p className="text-xs text-gray-400 mt-0.5">Showing undelivered orders</p>}
+            {!searchQuery && <p className="text-xs text-gray-400 mt-0.5">Showing {statusFilter.toLowerCase()} orders</p>}
           </div>
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-gray-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by Order ID (ONxxxx), bill no., customer name or mobile"
-              className="field-input pl-9 py-2 text-xs"
-            />
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="field-input py-2 text-xs w-full sm:w-36 font-semibold bg-gray-50 border-gray-200"
+            >
+              <option value="All">All Time</option>
+              {sortedMonths.length > 0 && (
+                <optgroup label="Months">
+                  {sortedMonths.map(m => (
+                    <option key={m} value={m}>{formatMonth(m)}</option>
+                  ))}
+                </optgroup>
+              )}
+              {sortedYears.length > 0 && (
+                <optgroup label="Years">
+                  {sortedYears.map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="field-input py-2 text-xs w-full sm:w-32"
+            >
+              <option value="All">All Statuses</option>
+              <option value="Pending">Pending</option>
+              <option value="Ready">Ready</option>
+              <option value="Delivered">Delivered</option>
+            </select>
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by Order ID (ONxxxx), bill no., customer name or mobile"
+                className="field-input pl-9 py-2 text-xs"
+              />
+            </div>
           </div>
         </div>
 
@@ -698,7 +839,7 @@ export default function Dashboard({ refreshTrigger }) {
                         order.status === 'Ready' ? 'badge-amber' :
                         'badge-red'
                       }>
-                        {order.status}
+                        {order.status === 'Undelivered' ? 'Pending' : order.status}
                       </span>
                     </td>
                     <td className="text-center" onClick={(e) => { e.stopPropagation(); openOrder(order.bill_number); }}>
